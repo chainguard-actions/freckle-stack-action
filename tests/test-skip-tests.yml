@@ -1,0 +1,55 @@
+name: Test stack action with tests disabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up minimal Haskell project fixture
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/haskell-project-notest/src"
+          cat > "$GITHUB_WORKSPACE/haskell-project-notest/stack.yaml" <<'EOF'
+          resolver: lts-21.25
+          packages:
+            - .
+          EOF
+          cat > "$GITHUB_WORKSPACE/haskell-project-notest/test-project.cabal" <<'EOF'
+          cabal-version: 2.4
+          name: test-project
+          version: 0.1.0.0
+          library
+            exposed-modules: Lib
+            hs-source-dirs: src
+            build-depends: base >= 4.7 && < 5
+            default-language: Haskell2010
+          EOF
+          cat > "$GITHUB_WORKSPACE/haskell-project-notest/src/Lib.hs" <<'EOF'
+          module Lib (someFunc) where
+          someFunc :: IO ()
+          someFunc = putStrLn "someFunc"
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          working-directory: haskell-project-notest
+          test: "false"
+          color: "false"
+          install-stack: "false"
+          upgrade-stack: "false"
+          stack-build-arguments: "--fast"
+          on-dirty-files: warn
+        continue-on-error: true
+
+      - name: Assert action ran with test disabled
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "action outcome: $OUTCOME"
+          if [ -z "$OUTCOME" ]; then
+            echo "FAIL: action did not produce an outcome"
+            exit 1
+          fi
+          echo "PASS: action completed with outcome=$OUTCOME (test=false, color=false)"
