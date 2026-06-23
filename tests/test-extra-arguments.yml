@@ -1,0 +1,64 @@
+name: Test extra stack arguments inputs
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install GHC via apt
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ghc
+          GHC_VERSION=$(ghc --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          echo "GHC version: $GHC_VERSION"
+          echo "GHC_VERSION=$GHC_VERSION" >> "$GITHUB_ENV"
+
+      - name: Create minimal Haskell project
+        run: |
+          mkdir -p /tmp/test-project/src
+          printf 'resolver: ghc-%s\n' "$GHC_VERSION" > /tmp/test-project/stack.yaml
+          printf 'cabal-version: 1.12\nname: minimal\nversion: 0.0.0.0\nbuild-type: Simple\nlibrary\n  exposed-modules: Lib\n  hs-source-dirs: src\n  build-depends: base\n  default-language: Haskell2010\n' > /tmp/test-project/minimal.cabal
+          printf 'module Lib where\nhello :: String\nhello = "Hello, World!"\n' > /tmp/test-project/src/Lib.hs
+          echo "stack.yaml contents:"
+          cat /tmp/test-project/stack.yaml
+
+      - id: action
+        uses: .
+        with:
+          working-directory: /tmp/test-project
+          test: "false"
+          upgrade-stack: "false"
+          stack-arguments: "--system-ghc"
+          stack-build-arguments: "--fast"
+          stack-build-arguments-dependencies: "--no-haddock"
+          stack-build-arguments-build: "--no-haddock"
+          stack-build-arguments-test: "--no-haddock"
+          stack-query-arguments: ""
+          stack-path-arguments: ""
+          stack-setup-arguments: ""
+          cache-prefix: "v1"
+          on-dirty-files: warn
+
+      - name: Assert action succeeded
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected action to succeed with extra arguments"
+            exit 1
+          fi
+          echo "PASS: action succeeded with extra stack arguments"
+
+      - name: Assert compiler output is set
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+        run: |
+          echo "compiler: $COMPILER"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: expected compiler output to be set"
+            exit 1
+          fi
+          echo "PASS: compiler output is set to '$COMPILER'"

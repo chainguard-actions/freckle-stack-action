@@ -1,0 +1,35 @@
+name: Generate Matrix
+description: Sub-action to generate a matrix of stack-yamls
+inputs:
+  working-directory:
+    description: "Working directory for run commands"
+    required: true
+    default: .
+  find-options:
+    description: "Arguments to find(1) stack-yaml files"
+    required: true
+    default: "-type f -maxdepth 1 -name 'stack*.yaml'"
+outputs:
+  stack-yamls:
+    description: Version-sorted list of all files matching stack*.yaml
+    value: ${{ steps.generate.outputs.stack-yamls }}
+runs:
+  using: composite
+  steps:
+    - id: generate
+      name: Generate
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        FIND_OPTIONS: ${{ inputs.find-options }}
+      run: |
+        # Parse FIND_OPTIONS into an array to avoid unquoted expansion
+        read -ra find_opts <<< "$FIND_OPTIONS"
+        stack_yamls=$(find "${find_opts[@]}" -printf '"%f"\n' | sort -V | jq --slurp)
+        # Use a random delimiter to prevent heredoc injection via newlines
+        delimiter="EOM_$(openssl rand -hex 16)"
+        {
+          echo "stack-yamls<<${delimiter}"
+          printf '%s\n' "$stack_yamls"
+          echo "${delimiter}"
+        } >>"$GITHUB_OUTPUT"

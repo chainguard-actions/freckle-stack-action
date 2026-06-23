@@ -1,0 +1,40 @@
+{
+  "name": "stack-action",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Build and test stack-based Haskell projects",
+  "main": "lib/main.js",
+  "scripts": {
+    "build": "tsc && ncc build lib/main.js && sed -i 's/\\x0D$//' ./dist/index.js",
+    "format": "prettier --write \"**/*.ts\"",
+    "format-check": "prettier --check \"**/*.ts\"",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "readme": "npx action-docs -u && prettier --write README.md"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/freckle/stack-action.git"
+  },
+  "author": "Freckle",
+  "license": "MIT",
+  "dependencies": {
+    "@actions/cache": "^5.1.0",
+    "@actions/core": "^3.0.1",
+    "@actions/exec": "^3.0.0",
+    "@actions/glob": "^0.7.0",
+    "js-yaml": "^4.2.0",
+    "shellwords-ts": "^3.0.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.13.2",
+    "@vercel/ncc": "^0.44.0",
+    "action-docs": "^2.5.1",
+    "jest": "^30.4.2",
+    "prettier": "^3.8.4",
+    "ts-jest": "^29.4.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}

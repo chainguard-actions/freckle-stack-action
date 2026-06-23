@@ -1,0 +1,44 @@
+name: Test error when stack not installed and install-stack is false
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create minimal Haskell project
+        run: |
+          mkdir -p /tmp/test-project/src
+          printf 'resolver: lts-18.3\n' > /tmp/test-project/stack.yaml
+          printf 'cabal-version: 1.12\nname: minimal\nversion: 0.0.0.0\nbuild-type: Simple\nlibrary\n  exposed-modules: Lib\n  hs-source-dirs: src\n  build-depends: base\n  default-language: Haskell2010\n' > /tmp/test-project/minimal.cabal
+          printf 'module Lib where\nhello :: String\nhello = "Hello, World!"\n' > /tmp/test-project/src/Lib.hs
+
+      - name: Remove stack from PATH directories
+        run: |
+          sudo rm -f /usr/local/bin/stack /usr/bin/stack /bin/stack || true
+          rm -f "$HOME/.local/bin/stack" || true
+          echo "PATH=/usr/bin:/bin" >> "$GITHUB_ENV"
+          PATH="/usr/bin:/bin" which stack && echo "WARNING: stack still found" || echo "stack not found (expected)"
+
+      - id: action
+        uses: .
+        env:
+          PATH: /usr/bin:/bin
+        with:
+          working-directory: /tmp/test-project
+          install-stack: "false"
+          upgrade-stack: "false"
+          test: "false"
+        continue-on-error: true
+
+      - name: Assert action failed when stack not installed
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected action to fail when stack is not installed and install-stack=false"
+            exit 1
+          fi
+          echo "PASS: action correctly failed when stack not installed"
