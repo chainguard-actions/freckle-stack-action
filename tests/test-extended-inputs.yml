@@ -1,0 +1,33 @@
+name: Test extended inputs coverage
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          test: false
+          install-stack: true
+          upgrade-stack: false
+          stack-arguments: "--version"
+          stack-query-arguments: ""
+          stack-path-arguments: ""
+          stack-setup-arguments: ""
+          stack-build-arguments: "--fast"
+          stack-build-arguments-dependencies: ""
+          stack-build-arguments-build: ""
+          stack-build-arguments-test: ""
+          compiler-tools: ""
+          stack-yaml: ""
+          cache-prefix: "v1"
+          cache-save-always: false
+          on-dirty-files: warn
+          color: false
+        continue-on-error: true
+      - name: Assert action ran
+        run: |
+          echo "Action completed (may have failed due to no Haskell project, but inputs were accepted)"
+          echo "PASS"

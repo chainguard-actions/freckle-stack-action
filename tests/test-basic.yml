@@ -1,0 +1,53 @@
+name: Test basic usage - action fails without stack when install-stack is false
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Confirm stack is not pre-installed
+        run: |
+          if command -v stack &>/dev/null; then
+            echo "stack is installed at: $(which stack)"
+            echo "SKIP: stack is pre-installed, cannot test install-stack:false error path"
+            echo "STACK_PREINSTALLED=true" >> "$GITHUB_ENV"
+          else
+            echo "stack is not installed"
+            echo "STACK_PREINSTALLED=false" >> "$GITHUB_ENV"
+          fi
+      - id: action
+        uses: .
+        with:
+          working-directory: pristine/freckle--stack-action/v5.7.21/example
+          install-stack: false
+          upgrade-stack: false
+          color: false
+          test: false
+          stack-build-arguments: "--fast"
+          on-dirty-files: warn
+        continue-on-error: true
+      - name: Assert action failed because stack is not installed
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          STACK_PREINSTALLED: ${{ env.STACK_PREINSTALLED }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "stack_preinstalled: $STACK_PREINSTALLED"
+          if [ "$STACK_PREINSTALLED" = "true" ]; then
+            echo "INFO: stack was pre-installed, action may have succeeded or failed for other reasons"
+            if [ "$OUTCOME" = "failure" ] || [ "$OUTCOME" = "success" ]; then
+              echo "PASS"
+            else
+              echo "FAIL: unexpected outcome: $OUTCOME"
+              exit 1
+            fi
+          else
+            # Stack is not installed and install-stack is false, so action must fail
+            if [ "$OUTCOME" = "failure" ]; then
+              echo "PASS: action correctly failed when stack not installed and install-stack:false"
+            else
+              echo "FAIL: expected action to fail when stack not installed and install-stack:false, got: $OUTCOME"
+              exit 1
+            fi
+          fi

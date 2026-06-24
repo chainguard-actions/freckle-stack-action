@@ -1,0 +1,52 @@
+name: Test error when stack not installed and install-stack is false
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Check if stack is pre-installed
+        run: |
+          if command -v stack &>/dev/null; then
+            echo "stack is installed at: $(which stack)"
+            echo "STACK_PREINSTALLED=true" >> "$GITHUB_ENV"
+          else
+            echo "stack is not installed"
+            echo "STACK_PREINSTALLED=false" >> "$GITHUB_ENV"
+          fi
+      - id: action
+        uses: .
+        with:
+          working-directory: pristine/freckle--stack-action/v5.7.21/example
+          install-stack: false
+          upgrade-stack: false
+          color: false
+          on-dirty-files: warn
+        continue-on-error: true
+      - name: Assert action failed when stack not installed
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+          STACK_PREINSTALLED: ${{ env.STACK_PREINSTALLED }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "stack_preinstalled: $STACK_PREINSTALLED"
+          if [ "$STACK_PREINSTALLED" = "false" ]; then
+            # Stack is not installed and install-stack is false
+            # The action must fail with an error about stack not being on PATH
+            if [ "$OUTCOME" = "failure" ]; then
+              echo "PASS: action correctly failed when stack not installed and install-stack:false"
+            else
+              echo "FAIL: expected failure when stack not installed and install-stack:false, got: $OUTCOME"
+              exit 1
+            fi
+          else
+            # Stack is pre-installed, so the action may proceed further
+            # Either outcome is acceptable in this case
+            if [ "$OUTCOME" = "failure" ] || [ "$OUTCOME" = "success" ]; then
+              echo "PASS: action completed with known outcome: $OUTCOME (stack was pre-installed)"
+            else
+              echo "FAIL: unexpected outcome: $OUTCOME"
+              exit 1
+            fi
+          fi
