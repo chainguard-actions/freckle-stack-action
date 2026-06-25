@@ -1,0 +1,61 @@
+name: Test per-phase stack build arguments
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install stack and GHC
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ghc
+          if ! command -v stack &>/dev/null; then
+            curl -sSL https://get.haskellstack.org/ | sh
+          fi
+          stack --version
+          ghc --version
+      - name: Create minimal Haskell project
+        run: |
+          GHC_VER=$(ghc --numeric-version)
+          mkdir -p /tmp/test-project-build-args/src
+          printf 'resolver: ghc-%s\n' "$GHC_VER" > /tmp/test-project-build-args/stack.yaml
+          printf '%s\n' \
+            'cabal-version: 1.12' \
+            'name: test-project' \
+            'version: 0.0.0.0' \
+            'build-type: Simple' \
+            'library' \
+            '  exposed-modules: Foo' \
+            '  hs-source-dirs: src' \
+            '  build-depends: base' \
+            '  default-language: Haskell2010' \
+            > /tmp/test-project-build-args/test-project.cabal
+          printf '%s\n' \
+            'module Foo where' \
+            'data Foo = Foo' \
+            > /tmp/test-project-build-args/src/Foo.hs
+          echo "Created project with GHC $GHC_VER"
+      - id: action
+        uses: .
+        with:
+          working-directory: /tmp/test-project-build-args
+          test: false
+          upgrade-stack: false
+          install-stack: false
+          stack-arguments: --system-ghc --no-install-ghc
+          stack-build-arguments: --fast
+          stack-build-arguments-dependencies: ""
+          stack-build-arguments-build: ""
+          stack-build-arguments-test: ""
+          on-dirty-files: warn
+      - name: Assert compiler output is set
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+        run: |
+          echo "compiler: $COMPILER"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: expected compiler output to be set"
+            exit 1
+          fi
+          echo "PASS"

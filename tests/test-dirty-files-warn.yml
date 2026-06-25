@@ -1,0 +1,72 @@
+name: Test stack build with on-dirty-files warn
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install stack and GHC
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ghc
+          if ! command -v stack &>/dev/null; then
+            curl -sSL https://get.haskellstack.org/ | sh
+          fi
+          stack --version
+          ghc --version
+      - name: Create minimal Haskell project
+        run: |
+          GHC_VER=$(ghc --numeric-version)
+          mkdir -p /tmp/test-project/src
+          printf 'resolver: ghc-%s\n' "$GHC_VER" > /tmp/test-project/stack.yaml
+          printf '%s\n' \
+            'cabal-version: 1.12' \
+            'name: test-project' \
+            'version: 0.0.0.0' \
+            'build-type: Simple' \
+            'library' \
+            '  exposed-modules: Foo' \
+            '  hs-source-dirs: src' \
+            '  build-depends: base' \
+            '  default-language: Haskell2010' \
+            > /tmp/test-project/test-project.cabal
+          printf '%s\n' \
+            'module Foo where' \
+            'data Foo = Foo' \
+            > /tmp/test-project/src/Foo.hs
+          echo "Created project with GHC $GHC_VER"
+      - id: action
+        uses: .
+        with:
+          working-directory: /tmp/test-project
+          test: false
+          upgrade-stack: false
+          install-stack: false
+          stack-arguments: --system-ghc --no-install-ghc
+          stack-build-arguments: --fast
+          on-dirty-files: warn
+      - name: Assert stack-root output is set
+        env:
+          STACK_ROOT: ${{ steps.action.outputs.stack-root }}
+        run: |
+          echo "stack-root: $STACK_ROOT"
+          if [ -z "$STACK_ROOT" ]; then
+            echo "FAIL: expected stack-root output to be set"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert compiler output starts with ghc-
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+        run: |
+          echo "compiler: $COMPILER"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: expected compiler output to be set"
+            exit 1
+          fi
+          if ! echo "$COMPILER" | grep -q "^ghc-"; then
+            echo "FAIL: compiler output should start with 'ghc-', got: $COMPILER"
+            exit 1
+          fi
+          echo "PASS: compiler=$COMPILER"
