@@ -1,0 +1,38 @@
+name: Test on-dirty-files warn behavior
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/haskell-project
+          test: false
+          upgrade-stack: false
+          install-stack: true
+          color: false
+          stack-build-arguments: "--fast"
+          on-dirty-files: warn
+      - name: Assert action succeeded with warn mode
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected action to succeed with on-dirty-files: warn"
+            exit 1
+          fi
+          echo "PASS"
+      - name: Assert compiler output is set
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+        run: |
+          echo "compiler: $COMPILER"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: expected compiler output to be non-empty"
+            exit 1
+          fi
+          echo "PASS"

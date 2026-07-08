@@ -1,0 +1,39 @@
+name: Test error when stack not installed and install-stack is false
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Ensure stack is not on PATH
+        run: |
+          # Remove stack from PATH if present by creating a wrapper that fails
+          if which stack 2>/dev/null; then
+            echo "stack found, will shadow it"
+            mkdir -p "$HOME/.local/bin-shadow"
+            printf '#!/bin/sh\nexit 127\n' > "$HOME/.local/bin-shadow/stack"
+            chmod +x "$HOME/.local/bin-shadow/stack"
+            echo "$HOME/.local/bin-shadow" >> "$GITHUB_PATH"
+          else
+            echo "stack not found, good"
+          fi
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/haskell-project
+          test: false
+          install-stack: false
+          upgrade-stack: false
+          color: false
+        continue-on-error: true
+      - name: Assert action failed
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected action to fail when stack is not installed and install-stack is false"
+            exit 1
+          fi
+          echo "PASS"
