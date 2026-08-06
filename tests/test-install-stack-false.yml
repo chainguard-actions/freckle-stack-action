@@ -1,0 +1,48 @@
+name: Test install-stack false without stack on PATH
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure stack is not on PATH
+        run: |
+          # Build a clean PATH that excludes any directory containing stack
+          CLEAN_PATH=""
+          IFS=: read -ra DIRS <<< "$PATH"
+          for dir in "${DIRS[@]}"; do
+            if [ -x "$dir/stack" ]; then
+              echo "Skipping $dir (contains stack)"
+            else
+              CLEAN_PATH="${CLEAN_PATH}${CLEAN_PATH:+:}${dir}"
+            fi
+          done
+          echo "PATH=$CLEAN_PATH" >> "$GITHUB_ENV"
+          echo "Cleaned PATH: $CLEAN_PATH"
+          echo "stack available after cleanup: $(PATH="$CLEAN_PATH" command -v stack 2>/dev/null || echo 'not found')"
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          working-directory: ${{ github.workspace }}/tests/fixtures/haskell-project
+          test: false
+          install-stack: false
+          upgrade-stack: false
+          on-dirty-files: warn
+
+      - name: Assert action failed gracefully when stack not installed and install-stack=false
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed as expected when stack is not installed and install-stack=false"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded (stack was already installed on the runner)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

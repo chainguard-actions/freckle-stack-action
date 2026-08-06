@@ -1,0 +1,101 @@
+#!/bin/sh
+# Fake stack binary for testing freckle/stack-action
+# Handles all commands the action invokes without actually building anything
+
+# Parse arguments to find the subcommand (skip global flags like --color, --system-ghc, etc.)
+SUBCOMMAND=""
+PREV=""
+for arg in "$@"; do
+  case "$arg" in
+    --*) ;;  # skip flags
+    *)
+      if [ -z "$SUBCOMMAND" ]; then
+        SUBCOMMAND="$arg"
+      fi
+      ;;
+  esac
+done
+
+case "$SUBCOMMAND" in
+  upgrade)
+    echo "stack is already up to date"
+    exit 0
+    ;;
+  setup)
+    echo "stack will use a system GHC"
+    exit 0
+    ;;
+  build)
+    echo "Build completed successfully"
+    exit 0
+    ;;
+  query)
+    cat <<'EOF'
+compiler:
+  actual: ghc-9.6.3
+  wanted: ghc-9.6.3
+locals:
+  myproject:
+    path: /tmp/haskell-project/
+    version: 0.0.0
+EOF
+    exit 0
+    ;;
+  path)
+    # Check if only --stack-root and --programs are requested (early call)
+    STACK_ROOT_ONLY=false
+    for arg in "$@"; do
+      case "$arg" in
+        --stack-root|--programs) STACK_ROOT_ONLY=true ;;
+      esac
+    done
+
+    if $STACK_ROOT_ONLY; then
+      cat <<'EOF'
+stack-root: /root/.stack
+programs: /root/.stack/programs/x86_64-linux
+EOF
+    else
+      cat <<'EOF'
+snapshot-doc-root: /root/.stack/snapshots/x86_64-linux/abc123/9.6.3/doc
+local-doc-root: /tmp/haskell-project/.stack-work/install/x86_64-linux/abc123/9.6.3/doc
+local-hoogle-root: /tmp/haskell-project/.stack-work/hoogle/x86_64-linux/abc123/9.6.3
+stack-root: /root/.stack
+global-config: /root/.stack/config.yaml
+project-root: /tmp/haskell-project
+config-location: /tmp/haskell-project/stack.yaml
+bin-path: /root/.stack/snapshots/x86_64-linux/abc123/9.6.3/bin:/usr/local/bin:/usr/bin:/bin
+programs: /root/.stack/programs/x86_64-linux
+compiler-exe: /root/.stack/programs/x86_64-linux/ghc-9.6.3/bin/ghc-9.6.3
+compiler-bin: /root/.stack/programs/x86_64-linux/ghc-9.6.3/bin
+compiler-tools-bin: /root/.stack/compiler-tools/x86_64-linux/ghc-9.6.3/bin
+local-bin: /root/.local/bin
+extra-include-dirs:
+extra-library-dirs:
+snapshot-pkg-db: /root/.stack/snapshots/x86_64-linux/abc123/9.6.3/pkgdb
+local-pkg-db: /tmp/haskell-project/.stack-work/install/x86_64-linux/abc123/9.6.3/pkgdb
+global-pkg-db: /root/.stack/programs/x86_64-linux/ghc-9.6.3/lib/ghc-9.6.3/package.conf.d
+ghc-package-path: /tmp/haskell-project/.stack-work/install/x86_64-linux/abc123/9.6.3/pkgdb:/root/.stack/snapshots/x86_64-linux/abc123/9.6.3/pkgdb
+snapshot-install-root: /root/.stack/snapshots/x86_64-linux/abc123/9.6.3
+local-install-root: /tmp/haskell-project/.stack-work/install/x86_64-linux/abc123/9.6.3
+dist-dir: .stack-work/dist/x86_64-linux/ghc-9.6.3
+local-hpc-root: /tmp/haskell-project/.stack-work/install/x86_64-linux/abc123/9.6.3/hpc
+EOF
+    fi
+    exit 0
+    ;;
+  exec)
+    # stack exec -- which gen-hie
+    # Return 1 to indicate gen-hie is not installed (skip hie.yaml generation)
+    exit 1
+    ;;
+  install)
+    # stack install --copy-compiler-tool ...
+    echo "Installed compiler tools"
+    exit 0
+    ;;
+  *)
+    echo "fake-stack: unknown subcommand '$SUBCOMMAND' (args: $*)" >&2
+    exit 0
+    ;;
+esac

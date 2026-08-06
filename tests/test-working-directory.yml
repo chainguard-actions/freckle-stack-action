@@ -1,0 +1,64 @@
+name: Test working-directory input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up fake stack binary
+        run: |
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-stack" /usr/local/bin/stack
+          chmod +x /usr/local/bin/stack
+          which stack
+
+      - name: Set up Haskell project fixture in a workspace subdirectory
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/workspace-subdir"
+          cp -r "$GITHUB_WORKSPACE/tests/fixtures/haskell-project/." "$GITHUB_WORKSPACE/tests/fixtures/workspace-subdir/"
+
+      - name: Create directories for cache paths
+        run: |
+          mkdir -p /root/.stack/programs/x86_64-linux
+          touch /root/.stack/config.yaml
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/workspace-subdir/.stack-work"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/workspace-subdir/.stack-work/.keep"
+
+      - id: action
+        uses: .
+        env:
+          ACTIONS_RESULTS_URL: ""
+        with:
+          working-directory: ${{ github.workspace }}/tests/fixtures/workspace-subdir
+          test: false
+          install-stack: false
+          upgrade-stack: false
+          stack-build-arguments: "--fast"
+          on-dirty-files: warn
+
+      - name: Assert compiler output is set (working-directory was used)
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+        run: |
+          echo "compiler: $COMPILER"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: expected compiler output to be set when using working-directory"
+            exit 1
+          fi
+          if ! echo "$COMPILER" | grep -qE '^ghc-'; then
+            echo "FAIL: compiler output '$COMPILER' does not start with 'ghc-'"
+            exit 1
+          fi
+          echo "PASS: compiler=$COMPILER"
+
+      - name: Assert compiler-version output is set
+        env:
+          COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
+        run: |
+          echo "compiler-version: $COMPILER_VERSION"
+          if [ -z "$COMPILER_VERSION" ]; then
+            echo "FAIL: expected compiler-version output to be set"
+            exit 1
+          fi
+          echo "PASS: compiler-version=$COMPILER_VERSION"
