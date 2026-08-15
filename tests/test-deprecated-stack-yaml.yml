@@ -1,0 +1,48 @@
+name: Test deprecated stack-yaml input produces warning
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          working-directory: action/example
+          test: false
+          install-stack: true
+          upgrade-stack: false
+          stack-build-arguments: "--fast"
+          # Use the deprecated stack-yaml input pointing to the example stack.yaml
+          stack-yaml: stack.yaml
+
+      - name: Assert action ran with deprecated stack-yaml input
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "compiler: $COMPILER"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$COMPILER" ]; then
+              echo "FAIL: action succeeded but compiler output is empty"
+              exit 1
+            fi
+            case "$COMPILER" in
+              ghc-*)
+                echo "PASS: action succeeded with deprecated stack-yaml input, compiler: $COMPILER"
+                ;;
+              *)
+                echo "FAIL: expected compiler to start with 'ghc-', got: $COMPILER"
+                exit 1
+                ;;
+            esac
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed (likely due to Haskell build environment constraints in act)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

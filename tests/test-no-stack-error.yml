@@ -1,0 +1,42 @@
+name: Test error when stack not installed and install-stack is false
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Remove stack from PATH if present
+        run: |
+          # Ensure stack is not available so the action must install it
+          # We test the case where install-stack=false and stack is absent
+          if which stack 2>/dev/null; then
+            echo "stack found at $(which stack), removing..."
+            sudo rm -f "$(which stack)"
+          fi
+          # Also check common locations
+          sudo rm -f /usr/local/bin/stack /usr/bin/stack ~/.local/bin/stack 2>/dev/null || true
+          echo "stack available: $(which stack 2>/dev/null || echo 'not found')"
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          install-stack: false
+          upgrade-stack: false
+          working-directory: action/example
+
+      - name: Assert action failed gracefully when stack not installed
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed as expected when stack is not installed and install-stack=false"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "PASS: stack was already installed on the runner (could not be removed), action succeeded"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

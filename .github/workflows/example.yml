@@ -1,0 +1,199 @@
+name: Example
+
+on:
+  pull_request:
+  push:
+    branches: main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: example
+
+jobs:
+  # Make sure we use an updated dist/index.js in the examples, which are
+  # effectively integration tests. In the case of a Dependabot PR, index.js
+  # won't be rebuilt otherwise.
+  dist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          cache: yarn
+          node-version-file: ".nvmrc"
+      - run: yarn install
+      - run: yarn build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dist
+          path: dist/index.js
+
+  test:
+    needs: dist
+
+    strategy:
+      matrix:
+        runner:
+          - ubuntu-latest
+          - macOS-latest
+          - windows-latest
+
+        stack:
+          - resolver: nightly
+          - resolver: lts
+          - resolver: lts-22.7
+            ghc: "9.6.4"
+          - resolver: lts-12.26
+            ghc: "8.4.4"
+
+        exclude:
+          # Binary distributions for older GHCs don't exist on macOS-latest
+          - runner: macOS-latest
+            stack: { ghc: "8.4.4" }
+
+      fail-fast: false
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: dist
+          path: dist # overwrite dist/index.js
+
+      - id: stack
+        uses: ./
+        with:
+          cache-prefix: v1/
+          working-directory: example
+          stack-arguments: --resolver ${{ matrix.stack.resolver }}
+
+      - name: Check compiler[-*] outputs
+        if: matrix.stack.ghc
+        shell: bash
+        env:
+          COMPILER: ${{ steps.stack.outputs.compiler }}
+          COMPILER_VERSION: ${{ steps.stack.outputs.compiler-version }}
+          EXPECTED_GHC: ${{ matrix.stack.ghc }}
+        run: |
+          [[ "$COMPILER" = "ghc-$EXPECTED_GHC" ]]
+          [[ "$COMPILER_VERSION" = "$EXPECTED_GHC" ]]
+
+      - name: Check presence of other outputs
+        shell: bash
+        env:
+          SNAPSHOT_DOC_ROOT: ${{ steps.stack.outputs.snapshot-doc-root }}
+          LOCAL_DOC_ROOT: ${{ steps.stack.outputs.local-doc-root }}
+          LOCAL_HOOGLE_ROOT: ${{ steps.stack.outputs.local-hoogle-root }}
+          STACK_ROOT: ${{ steps.stack.outputs.stack-root }}
+          PROJECT_ROOT: ${{ steps.stack.outputs.project-root }}
+          CONFIG_LOCATION: ${{ steps.stack.outputs.config-location }}
+          BIN_PATH: ${{ steps.stack.outputs.bin-path }}
+          PROGRAMS: ${{ steps.stack.outputs.programs }}
+          COMPILER_EXE: ${{ steps.stack.outputs.compiler-exe }}
+          COMPILER_BIN: ${{ steps.stack.outputs.compiler-bin }}
+          COMPILER_TOOLS_BIN: ${{ steps.stack.outputs.compiler-tools-bin }}
+          LOCAL_BIN: ${{ steps.stack.outputs.local-bin }}
+          SNAPSHOT_PKG_DB: ${{ steps.stack.outputs.snapshot-pkg-db }}
+          LOCAL_PKG_DB: ${{ steps.stack.outputs.local-pkg-db }}
+          GLOBAL_PKG_DB: ${{ steps.stack.outputs.global-pkg-db }}
+          GHC_PACKAGE_PATH: ${{ steps.stack.outputs.ghc-package-path }}
+          SNAPSHOT_INSTALL_ROOT: ${{ steps.stack.outputs.snapshot-install-root }}
+          LOCAL_INSTALL_ROOT: ${{ steps.stack.outputs.local-install-root }}
+          DIST_DIR: ${{ steps.stack.outputs.dist-dir }}
+          LOCAL_HPC_ROOT: ${{ steps.stack.outputs.local-hpc-root }}
+        run: |
+          # stack path | cut -d: -f1
+          [[ -n "$SNAPSHOT_DOC_ROOT" ]]
+          [[ -n "$LOCAL_DOC_ROOT" ]]
+          [[ -n "$LOCAL_HOOGLE_ROOT" ]]
+          [[ -n "$STACK_ROOT" ]]
+          [[ -n "$PROJECT_ROOT" ]]
+          [[ -n "$CONFIG_LOCATION" ]]
+          [[ -n "$BIN_PATH" ]]
+          [[ -n "$PROGRAMS" ]]
+          [[ -n "$COMPILER_EXE" ]]
+          [[ -n "$COMPILER_BIN" ]]
+          [[ -n "$COMPILER_TOOLS_BIN" ]]
+          [[ -n "$LOCAL_BIN" ]]
+
+          # Actually blank in default setup
+          # [[ -n "$EXTRA_INCLUDE_DIRS" ]]
+          # [[ -n "$EXTRA_LIBRARY_DIRS" ]]
+
+          [[ -n "$SNAPSHOT_PKG_DB" ]]
+          [[ -n "$LOCAL_PKG_DB" ]]
+          [[ -n "$GLOBAL_PKG_DB" ]]
+          [[ -n "$GHC_PACKAGE_PATH" ]]
+          [[ -n "$SNAPSHOT_INSTALL_ROOT" ]]
+          [[ -n "$LOCAL_INSTALL_ROOT" ]]
+          [[ -n "$DIST_DIR" ]]
+          [[ -n "$LOCAL_HPC_ROOT" ]]
+
+  test-generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - id: generate
+        uses: ./generate-matrix
+        with:
+          working-directory: example
+    outputs:
+      stack-yamls: ${{ steps.generate.outputs.stack-yamls }}
+
+  test-stack-yamls:
+    needs: [dist, test-generate]
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        stack-yaml: ${{ fromJSON(needs.test-generate.outputs.stack-yamls) }}
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: dist
+          path: dist # overwrite dist/index.js
+
+      - env:
+          STACK_YAML: ${{ matrix.stack-yaml }}
+        run: |
+          if [[ -L "$STACK_YAML" ]]; then
+            echo "generate-matrix incorrectly included a symlink" >&2
+            exit 1
+          fi
+      - uses: ./
+        with:
+          working-directory: example
+          stack-arguments: --stack-yaml ${{ matrix.stack-yaml }}
+
+  test-fails-on-error:
+    needs: dist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: dist
+          path: dist # overwrite dist/index.js
+
+      - name: Should fail
+        id: stack-action-step
+        continue-on-error: true
+        uses: ./
+        with:
+          working-directory: example
+          stack-arguments: --resolver bad-resolver
+      - name: Check failure
+        if: steps.stack-action-step.outcome != 'failure'
+        run: exit 1

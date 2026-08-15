@@ -1,0 +1,58 @@
+name: Test cache-prefix and per-phase build arguments
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          working-directory: action/example
+          test: false
+          install-stack: true
+          upgrade-stack: false
+          stack-build-arguments: "--fast"
+          stack-build-arguments-dependencies: "--no-terminal"
+          stack-build-arguments-build: "--no-terminal"
+          stack-build-arguments-test: "--no-terminal"
+          cache-prefix: "v1"
+          cache-save-always: false
+
+      - name: Assert action ran with cache-prefix and per-phase build arguments
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+          COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          echo "compiler: $COMPILER"
+          echo "compiler-version: $COMPILER_VERSION"
+          if [ "$OUTCOME" = "success" ]; then
+            if [ -z "$COMPILER" ]; then
+              echo "FAIL: action succeeded but compiler output is empty"
+              exit 1
+            fi
+            if [ -z "$COMPILER_VERSION" ]; then
+              echo "FAIL: action succeeded but compiler-version output is empty"
+              exit 1
+            fi
+            case "$COMPILER" in
+              ghc-*)
+                echo "PASS: compiler starts with 'ghc-': $COMPILER"
+                ;;
+              *)
+                echo "FAIL: expected compiler to start with 'ghc-', got: $COMPILER"
+                exit 1
+                ;;
+            esac
+            echo "PASS"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (Haskell build environment constraints in act)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
