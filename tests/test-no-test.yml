@@ -1,4 +1,4 @@
-name: Test basic usage
+name: Test with tests disabled
 on:
   workflow_dispatch:
 jobs:
@@ -22,7 +22,7 @@ jobs:
           test: false
           upgrade-stack: false
           stack-build-arguments: "--fast"
-          cache-prefix: "test-basic-"
+          cache-prefix: "test-no-test-"
       - name: Assert compiler output is set
         env:
           COMPILER: ${{ steps.action.outputs.compiler }}
@@ -32,24 +32,24 @@ jobs:
             echo "FAIL: expected compiler output to be set"
             exit 1
           fi
-          echo "PASS: compiler output is set"
-      - name: Assert compiler-version output is set
+          echo "PASS"
+      - name: Assert compiler starts with ghc-
         env:
-          COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
+          COMPILER: ${{ steps.action.outputs.compiler }}
         run: |
-          echo "compiler-version: $COMPILER_VERSION"
-          if [ -z "$COMPILER_VERSION" ]; then
-            echo "FAIL: expected compiler-version output to be set"
+          echo "compiler: $COMPILER"
+          if ! echo "$COMPILER" | grep -qE '^ghc-'; then
+            echo "FAIL: expected compiler to start with 'ghc-', got: $COMPILER"
             exit 1
           fi
-          echo "PASS: compiler-version output is set"
-      - name: Assert compiler-version is a valid version string
+          echo "PASS: compiler starts with ghc-"
+      - name: Assert stack-root output is set
         env:
-          COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
+          STACK_ROOT: ${{ steps.action.outputs.stack-root }}
         run: |
-          echo "compiler-version: $COMPILER_VERSION"
-          if ! echo "$COMPILER_VERSION" | grep -qE '^[0-9]+\.[0-9]+'; then
-            echo "FAIL: compiler-version '$COMPILER_VERSION' does not look like a version"
+          echo "stack-root: $STACK_ROOT"
+          if [ -z "$STACK_ROOT" ]; then
+            echo "FAIL: expected stack-root output to be set"
             exit 1
           fi
-          echo "PASS: compiler-version looks like a valid version"
+          echo "PASS: stack-root is set"

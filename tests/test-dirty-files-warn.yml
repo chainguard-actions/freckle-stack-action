@@ -1,0 +1,36 @@
+name: Test dirty files warn mode
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up fake stack environment
+        run: |
+          chmod +x "$GITHUB_WORKSPACE/tests/fixtures/fake-stack/stack"
+          echo "$GITHUB_WORKSPACE/tests/fixtures/fake-stack" >> "$GITHUB_PATH"
+          mkdir -p /tmp/fake-stack-root/snapshots/x86_64-linux/abc123/9.4.8
+          mkdir -p /tmp/fake-stack-root/compiler-tools/x86_64-linux/ghc-9.4.8/bin
+          mkdir -p /tmp/fake-stack-programs/ghc-9.4.8/bin
+          mkdir -p /tmp/local-bin
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/haskell-project/.stack-work"
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/haskell-project
+          test: false
+          upgrade-stack: false
+          stack-build-arguments: "--fast"
+          on-dirty-files: warn
+          cache-prefix: "test-dirty-warn-"
+      - name: Assert action succeeded and compiler output is set
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+        run: |
+          echo "compiler: $COMPILER"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: expected compiler output to be set (action should succeed in warn mode)"
+            exit 1
+          fi
+          echo "PASS: action succeeded in warn mode"

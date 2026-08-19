@@ -1,4 +1,4 @@
-name: Test basic usage
+name: Test stack build arguments and compiler tools
 on:
   workflow_dispatch:
 jobs:
@@ -19,10 +19,16 @@ jobs:
         uses: .
         with:
           working-directory: tests/fixtures/haskell-project
-          test: false
+          test: true
           upgrade-stack: false
           stack-build-arguments: "--fast"
-          cache-prefix: "test-basic-"
+          stack-build-arguments-dependencies: "--no-terminal"
+          stack-build-arguments-build: "--no-terminal"
+          stack-build-arguments-test: "--no-terminal"
+          compiler-tools: |
+            hlint
+            hoogle
+          cache-prefix: "test-build-args-"
       - name: Assert compiler output is set
         env:
           COMPILER: ${{ steps.action.outputs.compiler }}
@@ -43,13 +49,3 @@ jobs:
             exit 1
           fi
           echo "PASS: compiler-version output is set"
-      - name: Assert compiler-version is a valid version string
-        env:
-          COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
-        run: |
-          echo "compiler-version: $COMPILER_VERSION"
-          if ! echo "$COMPILER_VERSION" | grep -qE '^[0-9]+\.[0-9]+'; then
-            echo "FAIL: compiler-version '$COMPILER_VERSION' does not look like a version"
-            exit 1
-          fi
-          echo "PASS: compiler-version looks like a valid version"

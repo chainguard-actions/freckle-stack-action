@@ -23,13 +23,10 @@ runs:
       env:
         FIND_OPTIONS: ${{ inputs.find-options }}
       run: |
-        # Parse FIND_OPTIONS into an array to avoid unquoted expansion
-        read -ra find_opts <<< "$FIND_OPTIONS"
-        stack_yamls=$(find "${find_opts[@]}" -printf '"%f"\n' | sort -V | jq --slurp)
-        # Use a random delimiter to prevent heredoc injection via newlines
-        delimiter="EOM_$(openssl rand -hex 16)"
         {
-          echo "stack-yamls<<${delimiter}"
-          printf '%s\n' "$stack_yamls"
-          echo "${delimiter}"
-        } >>"$GITHUB_OUTPUT"
+          echo 'stack-yamls<<EOM'
+          read -ra find_opts <<< "$FIND_OPTIONS"
+          find "${find_opts[@]}" -printf '"%f"\n' | sort -V | jq --slurp | tr -d '\n\r'
+          echo
+          echo 'EOM'
+        } >> "$GITHUB_OUTPUT"

@@ -1,0 +1,95 @@
+#!/bin/sh
+# Fake stack binary for testing freckle/stack-action
+# Handles all stack commands the action needs without actually building anything
+
+# Parse arguments to find the subcommand (skip global flags)
+SUBCOMMAND=""
+for arg in "$@"; do
+  case "$arg" in
+    --color=*|--color|--stack-yaml|--resolver|--system-ghc|--skip-ghc-check)
+      # skip global flags
+      ;;
+    -*|=*)
+      # skip other flags and values
+      ;;
+    *)
+      if [ -z "$SUBCOMMAND" ]; then
+        SUBCOMMAND="$arg"
+      fi
+      ;;
+  esac
+done
+
+STACK_ROOT="${FAKE_STACK_ROOT:-/tmp/fake-stack-root}"
+STACK_PROGRAMS="${FAKE_STACK_PROGRAMS:-/tmp/fake-stack-programs}"
+
+case "$SUBCOMMAND" in
+  upgrade)
+    echo "Current Stack version: 2.15.7"
+    echo "Already at latest version."
+    exit 0
+    ;;
+  setup)
+    echo "stack will use a sandboxed GHC it installed"
+    echo "For more information on paths, see 'stack path' and 'stack exec env'"
+    exit 0
+    ;;
+  build)
+    echo "Building..."
+    exit 0
+    ;;
+  query)
+    cat <<'EOF'
+compiler:
+  actual: ghc-9.4.8
+  wanted: ghc-9.4.8
+locals:
+  test-project:
+    path: /workspace/tests/fixtures/haskell-project/
+    version: 0.0.0.0
+EOF
+    exit 0
+    ;;
+  path)
+    cat <<EOF
+snapshot-doc-root: ${STACK_ROOT}/snapshots/x86_64-linux/abc123/9.4.8/doc
+local-doc-root: /workspace/.stack-work/install/x86_64-linux/abc123/9.4.8/doc
+local-hoogle-root: /workspace/.stack-work/hoogle/x86_64-linux/abc123/9.4.8
+stack-root: ${STACK_ROOT}
+global-config: ${STACK_ROOT}/config.yaml
+project-root: /workspace/tests/fixtures/haskell-project
+config-location: /workspace/tests/fixtures/haskell-project/stack.yaml
+bin-path: ${STACK_ROOT}/snapshots/x86_64-linux/abc123/9.4.8/bin:/usr/local/bin:/usr/bin:/bin
+programs: ${STACK_PROGRAMS}
+compiler-exe: ${STACK_PROGRAMS}/ghc-9.4.8/bin/ghc-9.4.8
+compiler-bin: ${STACK_PROGRAMS}/ghc-9.4.8/bin
+compiler-tools-bin: ${STACK_ROOT}/compiler-tools/x86_64-linux/ghc-9.4.8/bin
+local-bin: /tmp/local-bin
+extra-include-dirs:
+extra-library-dirs:
+snapshot-pkg-db: ${STACK_ROOT}/snapshots/x86_64-linux/abc123/9.4.8/pkgdb
+local-pkg-db: /workspace/.stack-work/install/x86_64-linux/abc123/9.4.8/pkgdb
+global-pkg-db: ${STACK_PROGRAMS}/ghc-9.4.8/lib/ghc-9.4.8/package.conf.d
+ghc-package-path: /workspace/.stack-work/install/x86_64-linux/abc123/9.4.8/pkgdb:${STACK_ROOT}/snapshots/x86_64-linux/abc123/9.4.8/pkgdb
+snapshot-install-root: ${STACK_ROOT}/snapshots/x86_64-linux/abc123/9.4.8
+local-install-root: /workspace/.stack-work/install/x86_64-linux/abc123/9.4.8
+dist-dir: .stack-work/dist/x86_64-linux/ghc-9.4.8
+local-hpc-root: /workspace/.stack-work/install/x86_64-linux/abc123/9.4.8/hpc
+EOF
+    exit 0
+    ;;
+  exec)
+    # stack exec -- which gen-hie (or similar)
+    # Just succeed
+    exit 0
+    ;;
+  install)
+    # stack install --copy-compiler-tool ...
+    echo "Installing compiler tools..."
+    exit 0
+    ;;
+  *)
+    echo "fake-stack: unknown subcommand: $SUBCOMMAND (args: $*)" >&2
+    exit 0
+    ;;
+esac
