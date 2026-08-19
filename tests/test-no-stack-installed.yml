@@ -1,0 +1,43 @@
+name: Test - no stack installed error
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Shadow which to make stack appear absent
+        run: |
+          mkdir -p /tmp/no-stack-bin
+          printf '#!/bin/sh\nif [ "$1" = "stack" ]; then exit 1; fi\nexec /usr/bin/which "$@"\n' \
+            > /tmp/no-stack-bin/which
+          chmod +x /tmp/no-stack-bin/which
+          echo "/tmp/no-stack-bin" >> "$GITHUB_PATH"
+
+      - name: Verify which stack returns non-zero
+        run: |
+          if /tmp/no-stack-bin/which stack 2>/dev/null; then
+            echo "FAIL: fake which should return non-zero for stack"
+            exit 1
+          fi
+          echo "PASS: fake which correctly returns non-zero for stack"
+
+      - id: action
+        uses: .
+        with:
+          install-stack: "false"
+          upgrade-stack: "false"
+          working-directory: tests/fixtures/haskell-project
+        continue-on-error: true
+
+      - name: Assert action failed when stack not installed and install-stack is false
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "FAIL: expected action to fail when stack is not installed and install-stack=false"
+            exit 1
+          fi
+          echo "PASS: action correctly failed when stack not installed"

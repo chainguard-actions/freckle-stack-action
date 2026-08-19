@@ -23,11 +23,7 @@ runs:
       env:
         FIND_OPTIONS: ${{ inputs.find-options }}
       run: |
-        read -ra find_args <<< "$FIND_OPTIONS"
-        stack_yamls=$(find "${find_args[@]}" -printf '"%f"\n' | sort -V | jq --slurp)
-        {
-          echo 'stack-yamls<<EOM'
-          printf '%s' "$stack_yamls" | tr -d '\r'
-          echo
-          echo 'EOM'
-        } >>"$GITHUB_OUTPUT"
+        read -ra opts <<< "$FIND_OPTIONS"
+        stack_yamls=$(find "${opts[@]}" -printf '"%f"\n' | sort -V | jq --slurp)
+        safe=$(printf '%s' "$stack_yamls" | tr -d '\n\r')
+        echo "stack-yamls=$safe" >> "$GITHUB_OUTPUT"

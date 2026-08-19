@@ -1,0 +1,88 @@
+#!/bin/sh
+# Fake stack binary for testing freckle/stack-action
+# Returns appropriate output for each stack command without actually building anything.
+
+# Parse arguments to determine what command is being run
+ARGS="$*"
+
+# Helper: check if args contain a pattern
+contains() {
+  echo "$ARGS" | grep -q "$1"
+}
+
+# Handle each command
+if contains "path" && contains "stack-root" && contains "programs"; then
+  # stack path --stack-root --programs
+  printf 'stack-root: /home/runner/.stack\nprograms: /home/runner/.stack/programs/x86_64-linux\n'
+  exit 0
+fi
+
+if contains "path"; then
+  # stack path (full output)
+  printf 'local-bin: /home/runner/.local/bin\n'
+  printf 'snapshot-install-root: /home/runner/.stack/snapshots/x86_64-linux/lts-18.3/8.10.7\n'
+  printf 'local-install-root: /tmp/stack-work/install/x86_64-linux/lts-18.3/8.10.7\n'
+  printf 'snapshot-doc-root: /home/runner/.stack/snapshots/x86_64-linux/lts-18.3/8.10.7/doc\n'
+  printf 'local-doc-root: /tmp/stack-work/install/x86_64-linux/lts-18.3/8.10.7/doc\n'
+  printf 'local-hoogle-root: /tmp/stack-work/install/x86_64-linux/lts-18.3/8.10.7/hoogle\n'
+  printf 'dist-dir: .stack-work/dist/x86_64-linux/Cabal-3.4.1.0\n'
+  printf 'local-hpc-root: /tmp/stack-work/install/x86_64-linux/lts-18.3/8.10.7/hpc\n'
+  printf 'compiler-exe: /home/runner/.stack/programs/x86_64-linux/ghc-8.10.7/bin/ghc\n'
+  printf 'compiler-bin: /home/runner/.stack/programs/x86_64-linux/ghc-8.10.7/bin\n'
+  printf 'compiler-tools-bin: /home/runner/.stack/compiler-tools/x86_64-linux/ghc-8.10.7/bin\n'
+  printf 'extra-include-dirs: \n'
+  printf 'extra-library-dirs: \n'
+  printf 'snapshot-pkg-db: /home/runner/.stack/snapshots/x86_64-linux/lts-18.3/8.10.7/pkgdb\n'
+  printf 'local-pkg-db: /tmp/stack-work/install/x86_64-linux/lts-18.3/8.10.7/pkgdb\n'
+  printf 'global-pkg-db: /home/runner/.stack/programs/x86_64-linux/ghc-8.10.7/lib/ghc-8.10.7/package.conf.d\n'
+  printf 'ghc-package-path: /tmp/stack-work/install/x86_64-linux/lts-18.3/8.10.7/pkgdb\n'
+  printf 'root: /tmp/stack-work\n'
+  printf 'project-root: /tmp/stack-work\n'
+  printf 'config-location: /tmp/stack-work/stack.yaml\n'
+  printf 'bin-path: /home/runner/.local/bin\n'
+  printf 'ghc-paths: /home/runner/.stack/programs/x86_64-linux/ghc-8.10.7/bin\n'
+  exit 0
+fi
+
+if contains "query"; then
+  # stack query
+  printf 'compiler:\n  actual: ghc-8.10.7\n  wanted: ghc-8.10.7\n'
+  exit 0
+fi
+
+if contains "exec" && contains "which" && contains "gen-hie"; then
+  # stack exec -- which gen-hie (not installed, so return failure)
+  exit 1
+fi
+
+if contains "exec"; then
+  # stack exec (other)
+  exit 0
+fi
+
+if contains "setup"; then
+  # stack setup
+  echo "Fake stack: setup complete"
+  exit 0
+fi
+
+if contains "build"; then
+  # stack build (any variant)
+  echo "Fake stack: build complete"
+  exit 0
+fi
+
+if contains "install" && contains "copy-compiler-tool"; then
+  # stack install --copy-compiler-tool
+  echo "Fake stack: compiler tool install complete"
+  exit 0
+fi
+
+if contains "upgrade"; then
+  # stack upgrade
+  echo "Fake stack: upgrade complete"
+  exit 0
+fi
+
+# Default: succeed
+exit 0

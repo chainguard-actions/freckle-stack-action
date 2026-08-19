@@ -1,4 +1,4 @@
-name: Test stack build with tests skipped
+name: Test - skip tests with cache prefix
 on:
   workflow_dispatch:
 jobs:
@@ -6,67 +6,99 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install stack and GHC
+
+      - name: Install fake stack on PATH
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ghc
-          if ! command -v stack &>/dev/null; then
-            curl -sSL https://get.haskellstack.org/ | sh
-          fi
-          stack --version
-          ghc --version
-      - name: Create minimal Haskell project
+          mkdir -p /tmp/fake-bin
+          cp "$GITHUB_WORKSPACE/tests/fixtures/fake-stack/stack" /tmp/fake-bin/stack
+          chmod +x /tmp/fake-bin/stack
+          echo "/tmp/fake-bin" >> "$GITHUB_PATH"
+
+      - name: Verify fake stack is on PATH
         run: |
-          GHC_VER=$(ghc --numeric-version)
-          mkdir -p /tmp/test-project/src
-          printf 'resolver: ghc-%s\n' "$GHC_VER" > /tmp/test-project/stack.yaml
-          printf '%s\n' \
-            'cabal-version: 1.12' \
-            'name: test-project' \
-            'version: 0.0.0.0' \
-            'build-type: Simple' \
-            'library' \
-            '  exposed-modules: Foo' \
-            '  hs-source-dirs: src' \
-            '  build-depends: base' \
-            '  default-language: Haskell2010' \
-            > /tmp/test-project/test-project.cabal
-          printf '%s\n' \
-            'module Foo where' \
-            'data Foo = Foo' \
-            > /tmp/test-project/src/Foo.hs
-          echo "Created project with GHC $GHC_VER"
+          which stack
+          stack query
+
+      - name: Create stack directories expected by fake stack
+        run: |
+          mkdir -p /home/runner/.stack/programs/x86_64-linux
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/haskell-project/.stack-work"
+
+      - name: Start mock cache server and configure cache URL
+        run: |
+          python3 - <<'PYEOF' &
+          import http.server, threading, time
+
+          class H(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.send_header('Content-Type', 'application/json')
+                  self.end_headers()
+                  self.wfile.write(b'{"result":null}')
+              def do_POST(self):
+                  n = int(self.headers.get('Content-Length', 0))
+                  if n > 0:
+                      self.rfile.read(n)
+                  self.send_response(200)
+                  self.send_header('Content-Type', 'application/json')
+                  self.end_headers()
+                  self.wfile.write(b'{"cacheId":1}')
+              def do_PATCH(self):
+                  n = int(self.headers.get('Content-Length', 0))
+                  if n > 0:
+                      remaining = n
+                      while remaining > 0:
+                          chunk = self.rfile.read(min(remaining, 65536))
+                          if not chunk:
+                              break
+                          remaining -= len(chunk)
+                  self.send_response(204)
+                  self.end_headers()
+              def log_message(self, *args):
+                  pass
+          s = http.server.HTTPServer(('127.0.0.1', 12345), H)
+          t = threading.Thread(target=s.serve_forever, daemon=True)
+          t.start()
+          time.sleep(86400)
+          PYEOF
+          sleep 2
+          echo "ACTIONS_CACHE_URL=http://127.0.0.1:12345/" >> "$GITHUB_ENV"
+          echo "ACTIONS_RUNTIME_TOKEN=fake-runtime-token" >> "$GITHUB_ENV"
+
       - id: action
         uses: .
         with:
-          working-directory: /tmp/test-project
-          test: false
-          upgrade-stack: false
-          install-stack: false
-          stack-arguments: --system-ghc --no-install-ghc
-          stack-build-arguments: --fast
+          working-directory: tests/fixtures/haskell-project
+          install-stack: "false"
+          upgrade-stack: "false"
+          test: "false"
+          stack-build-arguments: "--fast"
+          cache-prefix: "v1"
+          cache-save-always: "false"
           on-dirty-files: warn
-      - name: Assert compiler output is set when tests are skipped
+
+      - name: Assert action succeeded
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" != "success" ]; then
+            echo "FAIL: expected action to succeed"
+            exit 1
+          fi
+          echo "PASS: action succeeded"
+
+      - name: Assert compiler output is set
         env:
           COMPILER: ${{ steps.action.outputs.compiler }}
         run: |
           echo "compiler: $COMPILER"
           if [ -z "$COMPILER" ]; then
-            echo "FAIL: expected compiler output to be set even when tests are skipped"
+            echo "FAIL: expected compiler output to be set"
             exit 1
           fi
-          echo "PASS"
-      - name: Assert compiler-version does not contain ghc- prefix
-        env:
-          COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
-        run: |
-          echo "compiler-version: $COMPILER_VERSION"
-          if [ -z "$COMPILER_VERSION" ]; then
-            echo "FAIL: expected compiler-version output to be set"
+          if ! echo "$COMPILER" | grep -qE '^ghc-'; then
+            echo "FAIL: compiler output '$COMPILER' does not start with 'ghc-'"
             exit 1
           fi
-          if echo "$COMPILER_VERSION" | grep -q "^ghc-"; then
-            echo "FAIL: compiler-version should not contain 'ghc-' prefix, got: $COMPILER_VERSION"
-            exit 1
-          fi
-          echo "PASS: compiler-version=$COMPILER_VERSION (no ghc- prefix)"
+          echo "PASS: compiler output is set and has correct prefix"

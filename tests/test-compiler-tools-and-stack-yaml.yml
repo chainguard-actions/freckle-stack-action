@@ -1,4 +1,4 @@
-name: Test - on-dirty-files warn mode
+name: Test - compiler tools and stack-yaml inputs
 on:
   workflow_dispatch:
 jobs:
@@ -73,19 +73,22 @@ jobs:
           upgrade-stack: "false"
           test: "false"
           stack-build-arguments: "--fast"
+          compiler-tools: |
+            hlint
+            weeder
+          stack-yaml: "stack.yaml"
           on-dirty-files: warn
-          color: "false"
 
-      - name: Assert action succeeded with warn mode
+      - name: Assert action succeeded
         env:
           OUTCOME: ${{ steps.action.outcome }}
         run: |
           echo "outcome: $OUTCOME"
           if [ "$OUTCOME" != "success" ]; then
-            echo "FAIL: expected action to succeed with on-dirty-files=warn"
+            echo "FAIL: expected action to succeed"
             exit 1
           fi
-          echo "PASS: action succeeded with on-dirty-files=warn"
+          echo "PASS: action succeeded"
 
       - name: Assert compiler output is set
         env:
