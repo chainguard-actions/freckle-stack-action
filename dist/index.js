@@ -56508,7 +56508,7 @@ const LF = 0x0A
 /**
  * @type {13} CR
  */
-const CR = 0
+const CR = 0x0D
 /**
  * @type {58} COLON
  */
@@ -59159,7 +59159,7 @@ function multipartFormDataParser (input, mimeType) {
       return entryList
     }
 
-    // 5.3. If position does not point to a sequence of bytes starting with 0
+    // 5.3. If position does not point to a sequence of bytes starting with 0x0D
     //      0x0A (CR LF), return failure.
     if (input[position.position] !== 0x0d || input[position.position + 1] !== 0x0a) {
       return 'failure'
