@@ -1,0 +1,76 @@
+name: Test custom find options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test yaml files with custom naming
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/custom"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/custom/config-1.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/custom/config-2.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/custom/config-10.yaml"
+          # These should NOT be found with the custom pattern
+          touch "$GITHUB_WORKSPACE/tests/fixtures/custom/stack.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/custom/other.txt"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/custom
+          find-options: "-type f -maxdepth 1 -name 'config-*.yaml'"
+
+      - name: Assert stack-yamls output contains config files
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Validate it is valid JSON array
+          echo "$ACTUAL" | jq -e 'type == "array"' > /dev/null || {
+            echo "FAIL: output is not a JSON array"
+            exit 1
+          }
+          echo "PASS: output is a valid JSON array"
+
+      - name: Assert custom find options returns correct files
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Check that config files are present
+          for expected in "config-1.yaml" "config-2.yaml" "config-10.yaml"; do
+            if ! echo "$ACTUAL" | jq -e --arg f "$expected" 'index($f) != null' > /dev/null; then
+              echo "FAIL: expected '$expected' in output but not found"
+              exit 1
+            fi
+            echo "PASS: found '$expected'"
+          done
+          # Check that stack.yaml is NOT present (doesn't match config-*.yaml)
+          if echo "$ACTUAL" | jq -e 'index("stack.yaml") != null' > /dev/null; then
+            echo "FAIL: 'stack.yaml' should not be in output with custom find options"
+            exit 1
+          fi
+          echo "PASS: 'stack.yaml' correctly excluded"
+
+      - name: Assert version sorting works correctly (config-10 after config-2)
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # With version sort (-V), config-10 should come after config-2
+          IDX_2=$(echo "$ACTUAL" | jq 'index("config-2.yaml")')
+          IDX_10=$(echo "$ACTUAL" | jq 'index("config-10.yaml")')
+          echo "index of config-2.yaml: $IDX_2"
+          echo "index of config-10.yaml: $IDX_10"
+          if [ "$IDX_10" -le "$IDX_2" ]; then
+            echo "FAIL: config-10.yaml should come after config-2.yaml in version sort"
+            exit 1
+          fi
+          echo "PASS: version sort is correct (config-10 after config-2)"

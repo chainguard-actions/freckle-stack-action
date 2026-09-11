@@ -1,0 +1,46 @@
+name: Test empty result - no matching files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create directory with no matching stack yaml files
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/empty"
+          # Create files that do NOT match stack*.yaml
+          touch "$GITHUB_WORKSPACE/tests/fixtures/empty/config.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/empty/README.md"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/empty/other.txt"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/empty
+
+      - name: Assert stack-yamls output is empty JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Validate it is valid JSON
+          echo "$ACTUAL" | jq -e . > /dev/null || {
+            echo "FAIL: output is not valid JSON"
+            exit 1
+          }
+          # Should be an empty array when no files match
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          echo "type: $TYPE"
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected JSON array type, got '$TYPE'"
+            exit 1
+          fi
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" -ne 0 ]; then
+            echo "FAIL: expected empty array (length 0), got length $COUNT"
+            exit 1
+          fi
+          echo "PASS: output is an empty JSON array as expected"

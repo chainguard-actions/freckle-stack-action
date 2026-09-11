@@ -1,0 +1,75 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test stack yaml files
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/basic"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/basic/stack.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/basic/stack-prod.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/basic/stack-staging.yaml"
+          # This file should NOT be found (not matching stack*.yaml)
+          touch "$GITHUB_WORKSPACE/tests/fixtures/basic/other.yaml"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/basic
+
+      - name: Assert stack-yamls output is non-empty JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Validate it is valid JSON array
+          echo "$ACTUAL" | jq -e 'type == "array"' > /dev/null || {
+            echo "FAIL: output is not a JSON array"
+            exit 1
+          }
+          echo "PASS: output is a valid JSON array"
+
+      - name: Assert stack-yamls contains expected files
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Check that all three stack yaml files are present
+          for expected in "stack.yaml" "stack-prod.yaml" "stack-staging.yaml"; do
+            if ! echo "$ACTUAL" | jq -e --arg f "$expected" 'index($f) != null' > /dev/null; then
+              echo "FAIL: expected '$expected' in output but not found"
+              exit 1
+            fi
+            echo "PASS: found '$expected'"
+          done
+          # Check that other.yaml is NOT present
+          if echo "$ACTUAL" | jq -e '"other.yaml" | . as $f | env | .ACTUAL | fromjson | index($f) != null' > /dev/null 2>&1; then
+            echo "Checking other.yaml is absent..."
+          fi
+          if echo "$ACTUAL" | jq -e 'index("other.yaml") != null' > /dev/null; then
+            echo "FAIL: 'other.yaml' should not be in output"
+            exit 1
+          fi
+          echo "PASS: 'other.yaml' correctly excluded"
+
+      - name: Assert output is version-sorted
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # The output should be version-sorted; verify it's an array with 3 elements
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" -ne 3 ]; then
+            echo "FAIL: expected 3 items, got $COUNT"
+            exit 1
+          fi
+          echo "PASS: correct number of items"
