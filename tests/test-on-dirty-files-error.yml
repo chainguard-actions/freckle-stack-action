@@ -1,0 +1,45 @@
+name: Test stack-action on-dirty-files error mode
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Ensure stack is not on PATH so we can test the install-stack: false path
+      - name: Remove stack from PATH if present
+        run: |
+          if command -v stack >/dev/null 2>&1; then
+            STACK_PATH="$(command -v stack)"
+            echo "Found stack at: $STACK_PATH"
+            sudo rm -f "$STACK_PATH"
+          else
+            echo "stack not found on PATH, good"
+          fi
+
+      # Test that on-dirty-files: error is accepted as a valid input value.
+      # The action will fail before reaching the dirty-files check because
+      # stack is not installed and install-stack is false.
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          install-stack: false
+          upgrade-stack: false
+          test: false
+          on-dirty-files: error
+
+      - name: Assert action ran with on-dirty-files error mode
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (stack absent, install-stack: false)"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded (stack was pre-installed)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

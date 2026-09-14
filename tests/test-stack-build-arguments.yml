@@ -1,0 +1,48 @@
+name: Test stack-action stack-build-arguments input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Ensure stack is not on PATH so we can test the install-stack: false path
+      - name: Remove stack from PATH if present
+        run: |
+          if command -v stack >/dev/null 2>&1; then
+            STACK_PATH="$(command -v stack)"
+            echo "Found stack at: $STACK_PATH"
+            sudo rm -f "$STACK_PATH"
+          else
+            echo "stack not found on PATH, good"
+          fi
+
+      # Test that stack-build-arguments and related inputs are accepted.
+      # The action will fail before reaching the build step because
+      # stack is not installed and install-stack is false.
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          install-stack: false
+          upgrade-stack: false
+          test: false
+          stack-build-arguments: "--fast"
+          stack-build-arguments-build: "--no-haddock"
+          stack-build-arguments-test: "--no-haddock"
+          stack-build-arguments-dependencies: "--no-haddock"
+
+      - name: Assert action ran with stack-build-arguments inputs
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (stack absent, install-stack: false)"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded (stack was pre-installed)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

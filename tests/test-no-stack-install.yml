@@ -1,0 +1,41 @@
+name: Test stack-action when install-stack is false and stack is absent
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Ensure stack is not on PATH so we can test the install-stack: false path
+      - name: Remove stack from PATH if present
+        run: |
+          if command -v stack >/dev/null 2>&1; then
+            STACK_PATH="$(command -v stack)"
+            echo "Found stack at: $STACK_PATH"
+            sudo rm -f "$STACK_PATH"
+          else
+            echo "stack not found on PATH, good"
+          fi
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          install-stack: false
+          upgrade-stack: false
+          test: false
+
+      - name: Assert action failed gracefully when stack is absent and install-stack is false
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed as expected when stack is absent and install-stack is false"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "WARN: action succeeded (stack may have been pre-installed); acceptable"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

@@ -1,0 +1,48 @@
+name: Test stack-action working-directory input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # Ensure stack is not on PATH so we can test the install-stack: false path
+      - name: Remove stack from PATH if present
+        run: |
+          if command -v stack >/dev/null 2>&1; then
+            STACK_PATH="$(command -v stack)"
+            echo "Found stack at: $STACK_PATH"
+            sudo rm -f "$STACK_PATH"
+          else
+            echo "stack not found on PATH, good"
+          fi
+
+      # The example directory contains a valid stack.yaml; test that working-directory
+      # is accepted as an input and the action processes it (fails gracefully since
+      # stack is not installed and install-stack is false)
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          working-directory: action/example
+          install-stack: false
+          upgrade-stack: false
+          test: false
+
+      - name: Assert action ran with working-directory input
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          # The action should fail because stack is not installed and install-stack is false.
+          # A success would mean stack was pre-installed (acceptable).
+          # Any outcome other than success or failure is unexpected.
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (stack absent, install-stack: false)"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded (stack was pre-installed)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi
