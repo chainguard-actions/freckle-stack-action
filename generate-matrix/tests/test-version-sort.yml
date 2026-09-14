@@ -1,0 +1,55 @@
+name: Test version-sorted output
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test stack yaml files with version-like names
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/version-sort"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/version-sort/stack-1.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/version-sort/stack-2.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/version-sort/stack-10.yaml"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/version-sort
+
+      - name: Assert output is version-sorted (1, 2, 10 not 1, 10, 2)
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Verify it's valid JSON
+          echo "$ACTUAL" | jq . > /dev/null || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Verify it's an array with 3 entries
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" != "3" ]; then
+            echo "FAIL: expected 3 entries, got $COUNT"
+            exit 1
+          fi
+          # Verify version sort order: stack-1.yaml, stack-2.yaml, stack-10.yaml
+          FIRST=$(echo "$ACTUAL" | jq -r '.[0]')
+          SECOND=$(echo "$ACTUAL" | jq -r '.[1]')
+          THIRD=$(echo "$ACTUAL" | jq -r '.[2]')
+          echo "first: $FIRST"
+          echo "second: $SECOND"
+          echo "third: $THIRD"
+          if [ "$FIRST" != "stack-1.yaml" ]; then
+            echo "FAIL: expected first entry to be 'stack-1.yaml', got '$FIRST'"
+            exit 1
+          fi
+          if [ "$SECOND" != "stack-2.yaml" ]; then
+            echo "FAIL: expected second entry to be 'stack-2.yaml', got '$SECOND'"
+            exit 1
+          fi
+          if [ "$THIRD" != "stack-10.yaml" ]; then
+            echo "FAIL: expected third entry to be 'stack-10.yaml' (version sort), got '$THIRD'"
+            exit 1
+          fi
+          echo "PASS: output is correctly version-sorted"

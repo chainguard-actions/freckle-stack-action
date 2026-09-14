@@ -1,0 +1,69 @@
+name: Test custom find options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test yaml files
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/custom-find"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/custom-find/stack.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/custom-find/stack-prod.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/custom-find/config.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/custom-find/config-prod.yaml"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/custom-find
+          find-options: "-type f -maxdepth 1 -name 'config*.yaml'"
+
+      - name: Assert only config yaml files are returned
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Verify it's valid JSON
+          echo "$ACTUAL" | jq . > /dev/null || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Verify it's an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected JSON array, got $TYPE"
+            exit 1
+          fi
+          # Check that config.yaml is included
+          if ! echo "$ACTUAL" | jq -e 'contains(["config.yaml"])' > /dev/null; then
+            echo "FAIL: config.yaml not found in output"
+            exit 1
+          fi
+          # Check that config-prod.yaml is included
+          if ! echo "$ACTUAL" | jq -e 'contains(["config-prod.yaml"])' > /dev/null; then
+            echo "FAIL: config-prod.yaml not found in output"
+            exit 1
+          fi
+          # Check that stack files are NOT included
+          if echo "$ACTUAL" | jq -e 'contains(["stack.yaml"])' > /dev/null; then
+            echo "FAIL: stack.yaml should not be in output with custom find options"
+            exit 1
+          fi
+          if echo "$ACTUAL" | jq -e 'contains(["stack-prod.yaml"])' > /dev/null; then
+            echo "FAIL: stack-prod.yaml should not be in output with custom find options"
+            exit 1
+          fi
+          echo "PASS: only config yaml files returned"
+
+      - name: Assert output has exactly 2 entries
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" != "2" ]; then
+            echo "FAIL: expected 2 entries, got $COUNT"
+            exit 1
+          fi
+          echo "PASS: exactly 2 entries found"

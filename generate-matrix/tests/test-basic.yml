@@ -1,0 +1,76 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test stack yaml files
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/basic"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/basic/stack.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/basic/stack-prod.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/basic/stack-staging.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/basic/not-a-stack.yaml"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/basic
+
+      - name: Assert stack-yamls output is a JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Verify it's valid JSON
+          echo "$ACTUAL" | jq . > /dev/null || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Verify it's an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected JSON array, got $TYPE"
+            exit 1
+          fi
+          echo "PASS: output is a valid JSON array"
+
+      - name: Assert stack yaml files are present in output
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Check that stack.yaml is included
+          if ! echo "$ACTUAL" | jq -e 'contains(["stack.yaml"])' > /dev/null; then
+            echo "FAIL: stack.yaml not found in output"
+            exit 1
+          fi
+          # Check that stack-prod.yaml is included
+          if ! echo "$ACTUAL" | jq -e 'contains(["stack-prod.yaml"])' > /dev/null; then
+            echo "FAIL: stack-prod.yaml not found in output"
+            exit 1
+          fi
+          # Check that stack-staging.yaml is included
+          if ! echo "$ACTUAL" | jq -e 'contains(["stack-staging.yaml"])' > /dev/null; then
+            echo "FAIL: stack-staging.yaml not found in output"
+            exit 1
+          fi
+          # Check that not-a-stack.yaml is NOT included (doesn't match stack*.yaml)
+          if echo "$ACTUAL" | jq -e 'contains(["not-a-stack.yaml"])' > /dev/null; then
+            echo "FAIL: not-a-stack.yaml should not be in output (doesn't match stack*.yaml)"
+            exit 1
+          fi
+          echo "PASS: correct files found in output"
+
+      - name: Assert output has exactly 3 entries
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" != "3" ]; then
+            echo "FAIL: expected 3 entries, got $COUNT"
+            exit 1
+          fi
+          echo "PASS: exactly 3 entries found"

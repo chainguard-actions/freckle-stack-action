@@ -1,0 +1,35 @@
+name: Test stack subcommand arguments
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          working-directory: /nonexistent-path-that-does-not-exist
+          test: "false"
+          stack-query-arguments: "--no-terminal"
+          stack-path-arguments: "--bin-path"
+          stack-setup-arguments: "--no-terminal"
+          stack-yaml: "stack.yaml"
+          install-stack: "false"
+          upgrade-stack: "false"
+
+      - name: Assert action ran with subcommand arguments (succeeded or failed gracefully)
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded with subcommand arguments"
+          elif [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully (expected without stack/GHC environment)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

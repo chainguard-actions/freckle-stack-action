@@ -1,0 +1,41 @@
+name: Test empty result when no files match
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create directory with no matching files
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/empty"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/empty/config.yaml"
+          touch "$GITHUB_WORKSPACE/tests/fixtures/empty/other.yaml"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/empty
+
+      - name: Assert output is an empty JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Verify it's valid JSON
+          echo "$ACTUAL" | jq . > /dev/null || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Verify it's an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected JSON array, got $TYPE"
+            exit 1
+          fi
+          # Verify it's empty
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" != "0" ]; then
+            echo "FAIL: expected empty array (length 0), got length $COUNT"
+            exit 1
+          fi
+          echo "PASS: output is an empty JSON array"

@@ -2,6 +2,7 @@
   "owner": "freckle",
   "repo": "stack-action",
   "version": "v5.7.29",
+  "path": "generate-matrix",
   "commit_sha": "c5b62aa4c722658775d1c53d501a21bca1d28c5a",
   "url": "https://github.com/freckle/stack-action",
   "policy_sha": "d636be7e43ef829af6e853da6b3c7566db9f72fe",

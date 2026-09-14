@@ -1,0 +1,23 @@
+name: hello-world
+version: 0.1.0.0
+description: Minimal Haskell project for testing
+
+dependencies:
+  - base >= 4.7 && < 5
+
+library:
+  source-dirs: src
+
+executables:
+  hello-world-exe:
+    main: Main.hs
+    source-dirs: app
+    dependencies:
+      - hello-world
+
+tests:
+  hello-world-test:
+    main: Spec.hs
+    source-dirs: test
+    dependencies:
+      - hello-world
