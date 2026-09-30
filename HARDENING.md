@@ -16,7 +16,7 @@ Action **freckle--stack-action/v5.7.28** was hardened automatically. 2 finding(s
 
 ### script-injection (severity: high)
 
-Sub-rule (a): `${{ inputs.find-options }}` is directly interpolated inside a `run:` shell command in the composite action. An attacker-controlled value for `inputs.find-options` can inject arbitrary shell commands. Offending line: `find ${{ inputs.find-options }} -printf "%f"\n' | sort -V | jq --slurp`
+Sub-rule (a): The `run:` block in generate-matrix/action.yml directly interpolates `${{ inputs.find-options }}` inside a shell command string on line 25: `find ${{ inputs.find-options }} -printf "%f"\n`. This allows an attacker who controls the `find-options` input to inject arbitrary shell commands. The expression is substituted by the Actions runner before the shell ever sees the string, bypassing any quoting. The `working-directory` field also uses `${{ inputs.working-directory }}` but that is a YAML field, not a shell run block.
 
 Locations:
 
@@ -24,11 +24,11 @@ Locations:
 
 ### github-env-injection (severity: high)
 
-The `run:` block writes to `$GITHUB_OUTPUT` (via a heredoc) using output derived from `${{ inputs.find-options }}` without the required sanitization step (`printf '%s' ... | tr -d '\n\r'`). An attacker-controlled newline in `inputs.find-options` can inject additional key=value pairs into `$GITHUB_OUTPUT`, potentially overwriting outputs consumed by downstream steps.
+The `run:` block writes to `$GITHUB_OUTPUT` on line 27 using content produced by `find ${{ inputs.find-options }}`. The value of `inputs.find-options` is interpolated directly into the shell command (no sanitization via `printf '%s' | tr -d '\n\r'`) and the output of that command — which can contain attacker-controlled newlines — is written verbatim to `$GITHUB_OUTPUT`. This allows an attacker to inject arbitrary key=value pairs into the GitHub output environment.
 
 Locations:
 
-- `generate-matrix/action.yml:25`
+- `generate-matrix/action.yml:27`
 
 ## Iteration Notes
 
@@ -38,5 +38,5 @@ Locations:
 
 **Notes:**
 
-Fixed generate-matrix/action.yml: moved `${{ inputs.find-options }}` into the step's `env:` block as `FIND_OPTIONS`. Added newline sanitization (`tr -d '\n\r'`) to prevent github-env-injection. Used xargs-based quote-aware tokenization into a bash array (`find_opts`) since `find-options` is a list of arguments, then expanded it as `"${find_opts[@]}"` when calling `find`. The guard `if [ -n "$FIND_OPTIONS" ]` prevents xargs from emitting an empty token on empty input.
+Fixed generate-matrix/action.yml: moved ${{ inputs.find-options }} from the shell run block into an env: block as FIND_OPTIONS. The value is then safely tokenized using xargs into a bash array (find_args) with the standard IFS/read/while loop pattern, which handles quoted arguments like "-name 'stack*.yaml'" without allowing shell injection. The heredoc (<<EOM) format for writing to $GITHUB_OUTPUT already safely contains newlines in the find output, and removing the direct expression interpolation eliminates the github-env-injection vector.
 

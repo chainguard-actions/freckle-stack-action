@@ -40,15 +40,13 @@ runs:
       env:
         FIND_OPTIONS: ${{ inputs.find-options }}
       run: |
-        find_args=()
+        find_opts=()
         if [ -n "$FIND_OPTIONS" ]; then
-          while IFS= read -r -d '' t; do find_args+=("$t"); done \
+          while IFS= read -r -d '' t; do find_opts+=("$t"); done \
             < <(printf '%s' "$FIND_OPTIONS" | xargs printf '%s\0')
         fi
-        stack_yamls=$(find "${find_args[@]}" -printf '"%f"\n' | sort -V | jq --slurp)
         {
           echo 'stack-yamls<<EOM'
-          printf '%s' "$stack_yamls" | tr -d '\n\r'
-          echo ''
+          find "${find_opts[@]}" -printf '"%f"\n' | sort -V | jq --slurp
           echo 'EOM'
         } >>"$GITHUB_OUTPUT"
