@@ -16,20 +16,19 @@ Action **freckle--stack-action--generate-matrix/v5.7.29** was hardened automatic
 
 ### script-injection (severity: high)
 
-Rule (a) violation: `${{ inputs.find-options }}` is directly interpolated inside a `run:` shell command on line 26: `find ${{ inputs.find-options }} -printf "%f"\n`. A caller can supply shell metacharacters or subcommands (e.g. `; malicious-command`) as the `find-options` input, which will be executed by bash before any quoting can protect the runner. The value must be passed via an `env:` variable and then double-quoted in the shell script instead.
+Sub-rule (a) and (b): The `run:` block in the `generate` step directly interpolates `${{ inputs.find-options }}` into the shell command string: `find ${{ inputs.find-options }} -printf ...`. This allows an attacker-controlled input to inject arbitrary shell commands (e.g. by passing `; malicious-command #` as the input value). The expression is also unquoted, allowing shell metacharacter splitting. The value should be passed via an `env:` variable and double-quoted: `env: FIND_OPTIONS: ${{ inputs.find-options }}` then `find "$FIND_OPTIONS" ...`.
 
 Locations:
 
-- `action.yml:26`
+- `action.yml:23`
 
 ### github-env-injection (severity: high)
 
-The `run:` block writes to `$GITHUB_OUTPUT` (line 29) using a heredoc whose content is derived from `find ${{ inputs.find-options }} ...` (line 26). The `inputs.find-options` value is an untrusted caller-controlled input that flows unsanitized into `$GITHUB_OUTPUT`. No `printf '%s' ... | tr -d '\n\r'` sanitization is applied before the write, allowing newline injection that could smuggle additional key=value pairs into the GitHub output environment.
+The `run:` block writes to `$GITHUB_OUTPUT` using a heredoc that includes the output of `find ${{ inputs.find-options }} ...`. The `inputs.find-options` value is interpolated directly into the shell command without sanitization (no `printf '%s' ... | tr -d '\n\r'` applied before the write). A malicious input containing newlines could inject arbitrary key=value pairs into `$GITHUB_OUTPUT`, potentially poisoning downstream steps that consume the `stack-yamls` output.
 
 Locations:
 
-- `action.yml:26`
-- `action.yml:29`
+- `action.yml:23`
 
 ### static-inline-injection (severity: high)
 
@@ -47,5 +46,9 @@ Locations:
 
 **Notes:**
 
-Fixed action.yml step 'Generate': moved `${{ inputs.find-options }}` from the run: block into an env: variable (FIND_OPTIONS). Since find-options is a list of arguments, used xargs-based tokenization into a bash array (find_opts) with a guarded if-block to handle empty values. Captured find output in $result, sanitized with `tr -d '\n\r'` into $safe, and wrote to $GITHUB_OUTPUT using simple key=value form instead of a heredoc, preventing newline injection.
+Fixed all three findings in hardened/action/action.yml:
+1. Moved `${{ inputs.find-options }}` from the run: block to an env: variable `FIND_OPTIONS`.
+2. Used xargs tokenization into a bash array (`find_opts`) to properly handle the space-separated list of find arguments while preserving quoting.
+3. Used `jq -c --slurp` for compact single-line JSON output.
+4. Sanitized the output with `tr -d '\n\r'` before writing to $GITHUB_OUTPUT via `printf` to prevent newline injection attacks.
 

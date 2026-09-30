@@ -16,7 +16,7 @@ Action **freckle--stack-action/v5.7.29** was hardened automatically. 2 finding(s
 
 ### script-injection (severity: high)
 
-Rule (a) violation: The `run:` block in generate-matrix/action.yml directly interpolates the expression `${{ inputs.find-options }}` inside a shell command string. An attacker who controls the calling workflow can supply a malicious value for `inputs.find-options` containing shell metacharacters (e.g. `;`, `|`, `$(...)`) that will be executed by the shell. Offending line: `find ${{ inputs.find-options }} -printf "%f"\n' | sort -V | jq --slurp`
+Rule (a) violation: `${{ inputs.find-options }}` is directly interpolated inside a `run:` shell command in the composite action. An attacker calling this action can supply a value like `-name x; malicious-command` to achieve arbitrary command execution. The offending line is: `find ${{ inputs.find-options }} -printf "%f"\n' | sort -V | jq --slurp`. Additionally, `${{ inputs.working-directory }}` is interpolated in the `working-directory:` field on line 22.
 
 Locations:
 
@@ -24,7 +24,7 @@ Locations:
 
 ### github-env-injection (severity: high)
 
-The `run:` block writes output derived from the untrusted input `${{ inputs.find-options }}` directly to `$GITHUB_OUTPUT` without applying the required sanitization step (`printf '%s' ... | tr -d '\n\r'`). A newline injected via `inputs.find-options` could allow an attacker to inject arbitrary key-value pairs into GITHUB_OUTPUT, potentially overwriting outputs consumed by downstream steps. The write occurs at the closing `} >>"$GITHUB_OUTPUT"` line.
+The `run:` block writes the output of `find ${{ inputs.find-options }}` directly to `$GITHUB_OUTPUT` without sanitization (no `printf '%s' ... | tr -d '\n\r'` step). The `inputs.find-options` value is untrusted and controlled by the calling workflow, allowing newline injection into the GitHub output file which can be used to set arbitrary output variables.
 
 Locations:
 
@@ -38,5 +38,5 @@ Locations:
 
 **Notes:**
 
-Fixed generate-matrix/action.yml: (1) Moved `${{ inputs.find-options }}` to the `env:` block as `FIND_OPTIONS` and used the xargs/while-read pattern to tokenize it into a bash array, preventing shell metacharacter injection. (2) Captured jq output into a variable and sanitized it with `tr -d '\n\r'` before writing to $GITHUB_OUTPUT, preventing newline injection. Replaced the heredoc output format with a single-line `printf` write since the value is now sanitized to be newline-free.
+Fixed generate-matrix/action.yml: moved `${{ inputs.find-options }}` from direct shell interpolation into the step's `env:` block as `FIND_OPTIONS`. Used the xargs/while-read-NUL tokenization pattern to safely split the argument list into a bash array `opts[]`, which is then passed to `find "${opts[@]}"`. This prevents both shell injection (script-injection finding) and newline injection into $GITHUB_OUTPUT (github-env-injection finding). The heredoc format for writing to $GITHUB_OUTPUT is preserved since jq --slurp produces multiline JSON. The `working-directory: ${{ inputs.working-directory }}` field is a YAML field (not a shell command) and was left unchanged.
 

@@ -45,6 +45,6 @@ runs:
           while IFS= read -r -d '' t; do find_opts+=("$t"); done \
             < <(printf '%s' "$FIND_OPTIONS" | xargs printf '%s\0')
         fi
-        result=$(find "${find_opts[@]}" -printf '"%f"\n' | sort -V | jq --slurp)
-        safe=$(printf '%s' "$result" | tr -d '\n\r')
-        echo "stack-yamls=$safe" >>"$GITHUB_OUTPUT"
+        stack_yamls=$(find "${find_opts[@]}" -printf '"%f"\n' | sort -V | jq -c --slurp)
+        safe=$(printf '%s' "$stack_yamls" | tr -d '\n\r')
+        printf 'stack-yamls=%s\n' "$safe" >> "$GITHUB_OUTPUT"
