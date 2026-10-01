@@ -1,0 +1,47 @@
+name: Test custom find options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/stacks
+          # Only match the versioned stack files (not the plain stack.yaml)
+          find-options: "-type f -maxdepth 1 -name 'stack-*.yaml'"
+
+      - name: Assert only versioned stack files are returned
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Verify it is valid JSON array
+          echo "$ACTUAL" | jq . > /dev/null || { echo "FAIL: output is not valid JSON"; exit 1; }
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected JSON array, got $TYPE"
+            exit 1
+          fi
+          # stack-2.0.yaml and stack-10.0.yaml should be present
+          if ! echo "$ACTUAL" | jq -e '.[] | select(. == "stack-2.0.yaml")' > /dev/null; then
+            echo "FAIL: stack-2.0.yaml not found in output"
+            exit 1
+          fi
+          if ! echo "$ACTUAL" | jq -e '.[] | select(. == "stack-10.0.yaml")' > /dev/null; then
+            echo "FAIL: stack-10.0.yaml not found in output"
+            exit 1
+          fi
+          # plain stack.yaml should NOT be present (doesn't match 'stack-*.yaml')
+          if echo "$ACTUAL" | jq -e '.[] | select(. == "stack.yaml")' > /dev/null; then
+            echo "FAIL: stack.yaml should not be in output with pattern 'stack-*.yaml'"
+            exit 1
+          fi
+          echo "PASS: only versioned stack files returned"

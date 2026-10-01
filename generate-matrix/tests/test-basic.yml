@@ -1,0 +1,66 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/stacks
+          find-options: "-type f -maxdepth 1 -name 'stack*.yaml'"
+
+      - name: Assert stack-yamls output is non-empty JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Verify it is valid JSON
+          echo "$ACTUAL" | jq . > /dev/null || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Verify it is an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected JSON array, got $TYPE"
+            exit 1
+          fi
+          echo "PASS: output is a valid JSON array"
+
+      - name: Assert stack.yaml is in the output
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if ! echo "$ACTUAL" | jq -e '.[] | select(. == "stack.yaml")' > /dev/null; then
+            echo "FAIL: stack.yaml not found in output"
+            exit 1
+          fi
+          echo "PASS: stack.yaml found in output"
+
+      - name: Assert stack-2.0.yaml is in the output
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if ! echo "$ACTUAL" | jq -e '.[] | select(. == "stack-2.0.yaml")' > /dev/null; then
+            echo "FAIL: stack-2.0.yaml not found in output"
+            exit 1
+          fi
+          echo "PASS: stack-2.0.yaml found in output"
+
+      - name: Assert stack-10.0.yaml is in the output
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if ! echo "$ACTUAL" | jq -e '.[] | select(. == "stack-10.0.yaml")' > /dev/null; then
+            echo "FAIL: stack-10.0.yaml not found in output"
+            exit 1
+          fi
+          echo "PASS: stack-10.0.yaml found in output"

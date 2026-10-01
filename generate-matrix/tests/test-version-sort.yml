@@ -1,0 +1,43 @@
+name: Test version sorting of stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/stacks
+          find-options: "-type f -maxdepth 1 -name 'stack*.yaml'"
+
+      - name: Assert version sort order (stack-2.0.yaml before stack-10.0.yaml)
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Get indices of the two version files
+          IDX_2=$(echo "$ACTUAL" | jq 'index("stack-2.0.yaml")')
+          IDX_10=$(echo "$ACTUAL" | jq 'index("stack-10.0.yaml")')
+          echo "index of stack-2.0.yaml: $IDX_2"
+          echo "index of stack-10.0.yaml: $IDX_10"
+          if [ -z "$IDX_2" ] || [ "$IDX_2" = "null" ]; then
+            echo "FAIL: stack-2.0.yaml not found in output"
+            exit 1
+          fi
+          if [ -z "$IDX_10" ] || [ "$IDX_10" = "null" ]; then
+            echo "FAIL: stack-10.0.yaml not found in output"
+            exit 1
+          fi
+          # Version sort: 2.0 < 10.0, so IDX_2 should be less than IDX_10
+          if [ "$IDX_2" -ge "$IDX_10" ]; then
+            echo "FAIL: expected stack-2.0.yaml (idx=$IDX_2) before stack-10.0.yaml (idx=$IDX_10) in version sort"
+            exit 1
+          fi
+          echo "PASS: version sort order is correct (stack-2.0.yaml at $IDX_2, stack-10.0.yaml at $IDX_10)"

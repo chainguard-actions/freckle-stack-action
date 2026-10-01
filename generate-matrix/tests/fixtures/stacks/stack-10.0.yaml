@@ -1,0 +1,3 @@
+# Fixture stack yaml file for testing version sorting (10 > 2 in version sort)
+name: stack-10.0
+version: "10.0.0"

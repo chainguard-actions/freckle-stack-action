@@ -1,0 +1,39 @@
+name: Test - no stack installed (install-stack false)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure stack is not on PATH
+        run: |
+          # Remove stack from PATH if present
+          if which stack 2>/dev/null; then
+            echo "stack found at $(which stack), will shadow it"
+          fi
+          mkdir -p "$HOME/.local/bin-shadow"
+          # Create a fake stack that doesn't exist (so 'which stack' fails)
+          echo "PATH=$HOME/.local/bin-shadow:$PATH" >> "$GITHUB_ENV"
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          install-stack: "false"
+          upgrade-stack: "false"
+
+      - name: Assert action failed with expected error
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed as expected when stack is not installed and install-stack=false"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded (stack was already installed in this environment)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

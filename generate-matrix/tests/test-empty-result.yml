@@ -1,0 +1,32 @@
+name: Test empty result when no stack yaml files match
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create empty temp directory
+        run: mkdir -p /tmp/empty-stacks
+
+      - id: action
+        uses: .
+        with:
+          working-directory: /tmp/empty-stacks
+          find-options: "-type f -maxdepth 1 -name 'stack*.yaml'"
+
+      - name: Assert stack-yamls output is an empty JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Verify it is valid JSON
+          echo "$ACTUAL" | jq . > /dev/null || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Verify it is an empty array
+          LENGTH=$(echo "$ACTUAL" | jq 'length')
+          if [ "$LENGTH" != "0" ]; then
+            echo "FAIL: expected empty array (length 0), got length $LENGTH"
+            exit 1
+          fi
+          echo "PASS: output is an empty JSON array as expected"

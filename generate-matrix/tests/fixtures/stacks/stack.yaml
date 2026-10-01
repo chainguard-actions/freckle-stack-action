@@ -1,0 +1,3 @@
+# Fixture stack yaml file for testing
+name: stack
+version: "1.0.0"
