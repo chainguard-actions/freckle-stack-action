@@ -74,6 +74,6 @@ inputs:
     description: |
       **Deprecated** use `env.STACK_YAML` or `stack-arguments` instead.
 runs:
+  pre: chainguard-phonehome.js
   using: "node24"
   main: "dist/index.js"
-  pre: chainguard-phonehome.js

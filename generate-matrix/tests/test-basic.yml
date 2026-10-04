@@ -1,0 +1,75 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Verify fixture files exist
+        run: |
+          echo "Workspace: $GITHUB_WORKSPACE"
+          ls -la "$GITHUB_WORKSPACE/tests/fixtures/stacks/"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: ${{ github.workspace }}/tests/fixtures/stacks
+
+      - name: Assert stack-yamls output is a non-empty JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Validate it is valid JSON
+          echo "$ACTUAL" | jq . > /dev/null 2>&1 || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Validate it is an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected JSON array, got $TYPE"
+            exit 1
+          fi
+          echo "PASS: output is a valid JSON array"
+
+      - name: Assert all three stack files are present
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" -ne 3 ]; then
+            echo "FAIL: expected 3 entries, got $COUNT"
+            exit 1
+          fi
+          echo "PASS: found 3 stack yaml files"
+
+      - name: Assert version-sorted order (1.0.0 before 2.0.0 before 10.0.0)
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          FIRST=$(echo "$ACTUAL" | jq -r '.[0]')
+          SECOND=$(echo "$ACTUAL" | jq -r '.[1]')
+          THIRD=$(echo "$ACTUAL" | jq -r '.[2]')
+          echo "first: $FIRST"
+          echo "second: $SECOND"
+          echo "third: $THIRD"
+          if [ "$FIRST" != "stack-1.0.0.yaml" ]; then
+            echo "FAIL: expected first entry to be 'stack-1.0.0.yaml', got '$FIRST'"
+            exit 1
+          fi
+          if [ "$SECOND" != "stack-2.0.0.yaml" ]; then
+            echo "FAIL: expected second entry to be 'stack-2.0.0.yaml', got '$SECOND'"
+            exit 1
+          fi
+          if [ "$THIRD" != "stack-10.0.0.yaml" ]; then
+            echo "FAIL: expected third entry to be 'stack-10.0.0.yaml', got '$THIRD'"
+            exit 1
+          fi
+          echo "PASS: files are in correct version-sorted order"

@@ -1,4 +1,4 @@
-name: Test basic usage
+name: Test cache-prefix and stack query/path arguments
 on:
   workflow_dispatch:
 jobs:
@@ -15,9 +15,12 @@ jobs:
           color: "false"
           stack-arguments: "--no-terminal"
           stack-build-arguments: "--fast"
+          stack-query-arguments: "--numeric-version"
+          stack-path-arguments: "--stack-root"
+          cache-prefix: "v1"
           working-directory: tests/fixtures/haskell-project
         continue-on-error: true
-      - name: Assert action ran (success or graceful failure without full Haskell toolchain)
+      - name: Assert action ran with cache-prefix and stack query/path arguments
         env:
           OUTCOME: ${{ steps.action.outcome }}
         run: |

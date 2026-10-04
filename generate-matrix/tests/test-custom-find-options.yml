@@ -1,0 +1,44 @@
+name: Test custom find-options input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Verify fixture files exist
+        run: |
+          echo "Workspace: $GITHUB_WORKSPACE"
+          ls -la "$GITHUB_WORKSPACE/tests/fixtures/stacks/"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: ${{ github.workspace }}/tests/fixtures/stacks
+          find-options: "-type f -maxdepth 1 -name 'stack-2.0.0.yaml'"
+
+      - name: Assert only stack-2.0.0.yaml is returned
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Validate it is valid JSON
+          echo "$ACTUAL" | jq . > /dev/null 2>&1 || { echo "FAIL: output is not valid JSON"; exit 1; }
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" -ne 1 ]; then
+            echo "FAIL: expected 1 entry matching 'stack-2.0.0.yaml', got $COUNT"
+            exit 1
+          fi
+          ENTRY=$(echo "$ACTUAL" | jq -r '.[0]')
+          echo "entry: $ENTRY"
+          if [ "$ENTRY" != "stack-2.0.0.yaml" ]; then
+            echo "FAIL: expected 'stack-2.0.0.yaml', got '$ENTRY'"
+            exit 1
+          fi
+          echo "PASS: custom find-options correctly filtered to one file"

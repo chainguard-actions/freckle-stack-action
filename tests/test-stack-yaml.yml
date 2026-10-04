@@ -1,4 +1,4 @@
-name: Test basic usage
+name: Test deprecated stack-yaml input
 on:
   workflow_dispatch:
 jobs:
@@ -15,15 +15,16 @@ jobs:
           color: "false"
           stack-arguments: "--no-terminal"
           stack-build-arguments: "--fast"
+          stack-yaml: "stack.yaml"
           working-directory: tests/fixtures/haskell-project
         continue-on-error: true
-      - name: Assert action ran (success or graceful failure without full Haskell toolchain)
+      - name: Assert action ran with stack-yaml input
         env:
           OUTCOME: ${{ steps.action.outcome }}
         run: |
           echo "outcome: $OUTCOME"
           if [ "$OUTCOME" = "success" ]; then
-            echo "PASS: action succeeded"
+            echo "PASS: action succeeded with stack-yaml input"
           elif [ "$OUTCOME" = "failure" ]; then
             echo "PASS: action failed gracefully (expected without full Haskell toolchain in act)"
           else

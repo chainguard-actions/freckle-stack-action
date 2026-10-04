@@ -1,4 +1,4 @@
-name: Test basic usage
+name: Test split stack build arguments
 on:
   workflow_dispatch:
 jobs:
@@ -11,19 +11,22 @@ jobs:
         with:
           install-stack: "true"
           upgrade-stack: "false"
-          test: "false"
+          test: "true"
           color: "false"
           stack-arguments: "--no-terminal"
           stack-build-arguments: "--fast"
+          stack-build-arguments-dependencies: "--no-run-tests"
+          stack-build-arguments-build: "--no-run-tests"
+          stack-build-arguments-test: "--no-run-benchmarks"
           working-directory: tests/fixtures/haskell-project
         continue-on-error: true
-      - name: Assert action ran (success or graceful failure without full Haskell toolchain)
+      - name: Assert action ran with split build arguments
         env:
           OUTCOME: ${{ steps.action.outcome }}
         run: |
           echo "outcome: $OUTCOME"
           if [ "$OUTCOME" = "success" ]; then
-            echo "PASS: action succeeded"
+            echo "PASS: action succeeded with split build arguments"
           elif [ "$OUTCOME" = "failure" ]; then
             echo "PASS: action failed gracefully (expected without full Haskell toolchain in act)"
           else
