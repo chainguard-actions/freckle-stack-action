@@ -1,0 +1,35 @@
+#!/bin/sh
+# Mock stack binary for testing freckle/stack-action
+# Returns appropriate outputs without actually building Haskell projects.
+
+# Join all args for pattern matching
+ARGS="$*"
+
+# path --stack-root --programs (called by getStackDirectories before caching)
+# Must be checked before the general "path" check
+if echo "$ARGS" | grep -q -- "--stack-root" && echo "$ARGS" | grep -q -- "--programs"; then
+  printf 'stack-root: /tmp/mock-stack-root\nprograms: /tmp/mock-stack-programs\n'
+  exit 0
+fi
+
+# query (called to get compiler info for outputs)
+if echo "$ARGS" | grep -qE '(^| )query( |$)'; then
+  printf 'compiler:\n  actual: ghc-9.6.6\n  wanted: ghc-9.6.6\n'
+  exit 0
+fi
+
+# exec -- which gen-hie (called by GenHIE.generate to check if gen-hie is installed)
+if echo "$ARGS" | grep -q "gen-hie"; then
+  exit 1
+fi
+
+# path (general, called to get all paths for action outputs)
+if echo "$ARGS" | grep -qE '(^| )path( |$)'; then
+  printf 'stack-root: /tmp/mock-stack-root\nprograms: /tmp/mock-stack-programs\nlocal-bin: /tmp/mock-local-bin\n'
+  exit 0
+fi
+
+# Default: success
+# Handles: setup, build --dependencies-only, build --test --no-run-tests,
+#          build --test, install --copy-compiler-tool, upgrade, etc.
+exit 0

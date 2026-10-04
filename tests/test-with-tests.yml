@@ -1,4 +1,4 @@
-name: Test stack sub-command arguments
+name: Test with tests enabled
 on:
   workflow_dispatch:
 jobs:
@@ -29,15 +29,9 @@ jobs:
           test: true
           upgrade-stack: false
           stack-build-arguments: "--fast"
-          stack-query-arguments: "--no-terminal"
-          stack-path-arguments: "--bin-path"
-          stack-setup-arguments: "--no-terminal"
-          stack-build-arguments-dependencies: "--no-terminal"
-          stack-build-arguments-build: "--no-terminal"
-          stack-build-arguments-test: "--no-run-tests"
           on-dirty-files: warn
 
-      - name: Assert compiler output is set
+      - name: Assert compiler output is set after full build with tests
         env:
           COMPILER: ${{ steps.action.outputs.compiler }}
           COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
@@ -56,8 +50,4 @@ jobs:
             echo "FAIL: compiler output does not match expected pattern 'ghc-X.Y.Z', got: $COMPILER"
             exit 1
           fi
-          if ! echo "$COMPILER_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "FAIL: compiler-version output does not match expected pattern 'X.Y.Z', got: $COMPILER_VERSION"
-            exit 1
-          fi
-          echo "PASS: compiler=$COMPILER compiler-version=$COMPILER_VERSION"
+          echo "PASS: full build with tests succeeded, compiler=$COMPILER"

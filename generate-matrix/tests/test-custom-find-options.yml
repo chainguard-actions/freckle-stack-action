@@ -1,0 +1,55 @@
+name: Test custom find options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test yaml files with custom naming
+        run: |
+          mkdir -p /tmp/test-custom
+          touch /tmp/test-custom/stack-prod.yaml
+          touch /tmp/test-custom/stack-staging.yaml
+          touch /tmp/test-custom/config.yaml
+          touch /tmp/test-custom/other.txt
+
+      - id: action
+        uses: .
+        with:
+          working-directory: /tmp/test-custom
+          find-options: "-type f -maxdepth 1 -name 'stack-*.yaml'"
+
+      - name: Assert only stack-prefixed yaml files are returned
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Should be valid JSON
+          echo "$ACTUAL" | jq . > /dev/null || { echo "FAIL: output is not valid JSON"; exit 1; }
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" != "2" ]; then
+            echo "FAIL: expected 2 files, got $COUNT"
+            exit 1
+          fi
+          # Verify stack-prod.yaml is present
+          HAS_PROD=$(echo "$ACTUAL" | jq 'map(select(. == "stack-prod.yaml")) | length')
+          if [ "$HAS_PROD" != "1" ]; then
+            echo "FAIL: stack-prod.yaml should be included"
+            exit 1
+          fi
+          # Verify stack-staging.yaml is present
+          HAS_STAGING=$(echo "$ACTUAL" | jq 'map(select(. == "stack-staging.yaml")) | length')
+          if [ "$HAS_STAGING" != "1" ]; then
+            echo "FAIL: stack-staging.yaml should be included"
+            exit 1
+          fi
+          # Verify config.yaml is NOT present
+          HAS_CONFIG=$(echo "$ACTUAL" | jq 'map(select(. == "config.yaml")) | length')
+          if [ "$HAS_CONFIG" != "0" ]; then
+            echo "FAIL: config.yaml should not be included"
+            exit 1
+          fi
+          echo "PASS"

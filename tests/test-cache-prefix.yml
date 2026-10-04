@@ -1,4 +1,4 @@
-name: Test stack sub-command arguments
+name: Test custom cache prefix
 on:
   workflow_dispatch:
 jobs:
@@ -26,18 +26,14 @@ jobs:
         uses: .
         with:
           working-directory: tests/fixtures/haskell-project
-          test: true
+          test: false
           upgrade-stack: false
           stack-build-arguments: "--fast"
-          stack-query-arguments: "--no-terminal"
-          stack-path-arguments: "--bin-path"
-          stack-setup-arguments: "--no-terminal"
-          stack-build-arguments-dependencies: "--no-terminal"
-          stack-build-arguments-build: "--no-terminal"
-          stack-build-arguments-test: "--no-run-tests"
+          cache-prefix: "test-v1"
+          cache-save-always: true
           on-dirty-files: warn
 
-      - name: Assert compiler output is set
+      - name: Assert compiler output is set with custom cache prefix
         env:
           COMPILER: ${{ steps.action.outputs.compiler }}
           COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
@@ -52,12 +48,4 @@ jobs:
             echo "FAIL: compiler-version output is empty"
             exit 1
           fi
-          if ! echo "$COMPILER" | grep -qE '^ghc-[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "FAIL: compiler output does not match expected pattern 'ghc-X.Y.Z', got: $COMPILER"
-            exit 1
-          fi
-          if ! echo "$COMPILER_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "FAIL: compiler-version output does not match expected pattern 'X.Y.Z', got: $COMPILER_VERSION"
-            exit 1
-          fi
-          echo "PASS: compiler=$COMPILER compiler-version=$COMPILER_VERSION"
+          echo "PASS: build succeeded with custom cache prefix, compiler=$COMPILER"

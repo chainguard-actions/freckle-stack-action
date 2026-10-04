@@ -1,0 +1,49 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test stack yaml files
+        run: |
+          mkdir -p /tmp/test-stacks
+          touch /tmp/test-stacks/stack.yaml
+          touch /tmp/test-stacks/stack-1.0.0.yaml
+          touch /tmp/test-stacks/stack-2.0.0.yaml
+          touch /tmp/test-stacks/not-a-stack.yaml
+
+      - id: action
+        uses: .
+        with:
+          working-directory: /tmp/test-stacks
+
+      - name: Assert stack-yamls output is a JSON array with correct files
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Should be a JSON array
+          echo "$ACTUAL" | jq . > /dev/null || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Should contain stack.yaml, stack-1.0.0.yaml, stack-2.0.0.yaml but NOT not-a-stack.yaml
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" != "3" ]; then
+            echo "FAIL: expected 3 files, got $COUNT"
+            exit 1
+          fi
+          # Check that not-a-stack.yaml is not included
+          HAS_NOT_STACK=$(echo "$ACTUAL" | jq 'map(select(. == "not-a-stack.yaml")) | length')
+          if [ "$HAS_NOT_STACK" != "0" ]; then
+            echo "FAIL: not-a-stack.yaml should not be included"
+            exit 1
+          fi
+          # Check that stack.yaml is included
+          HAS_STACK=$(echo "$ACTUAL" | jq 'map(select(. == "stack.yaml")) | length')
+          if [ "$HAS_STACK" != "1" ]; then
+            echo "FAIL: stack.yaml should be included"
+            exit 1
+          fi
+          echo "PASS"

@@ -1,4 +1,4 @@
-name: Test stack sub-command arguments
+name: Test deprecated and compiler-tools inputs
 on:
   workflow_dispatch:
 jobs:
@@ -26,15 +26,13 @@ jobs:
         uses: .
         with:
           working-directory: tests/fixtures/haskell-project
-          test: true
+          test: false
           upgrade-stack: false
           stack-build-arguments: "--fast"
-          stack-query-arguments: "--no-terminal"
-          stack-path-arguments: "--bin-path"
-          stack-setup-arguments: "--no-terminal"
-          stack-build-arguments-dependencies: "--no-terminal"
-          stack-build-arguments-build: "--no-terminal"
-          stack-build-arguments-test: "--no-run-tests"
+          stack-yaml: "stack.yaml"
+          compiler-tools: |
+            hlint
+            apply-refact
           on-dirty-files: warn
 
       - name: Assert compiler output is set

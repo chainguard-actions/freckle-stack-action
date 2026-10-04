@@ -1,4 +1,4 @@
-name: Test basic stack action invocation
+name: Test basic usage (no tests)
 on:
   workflow_dispatch:
 jobs:
@@ -7,48 +7,51 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Set up minimal Haskell project fixture
+      - name: Add mock stack dir to PATH
+        run: echo "$GITHUB_WORKSPACE/tests/fixtures/bin" >> "$GITHUB_PATH"
+
+      - name: Create mock stack directories for cache operations
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/haskell-project/src"
-          cat > "$GITHUB_WORKSPACE/haskell-project/stack.yaml" <<'EOF'
-          resolver: lts-21.25
-          packages:
-            - .
-          EOF
-          cat > "$GITHUB_WORKSPACE/haskell-project/test-project.cabal" <<'EOF'
-          cabal-version: 2.4
-          name: test-project
-          version: 0.1.0.0
-          library
-            exposed-modules: Lib
-            hs-source-dirs: src
-            build-depends: base >= 4.7 && < 5
-            default-language: Haskell2010
-          EOF
-          cat > "$GITHUB_WORKSPACE/haskell-project/src/Lib.hs" <<'EOF'
-          module Lib (someFunc) where
-          someFunc :: IO ()
-          someFunc = putStrLn "someFunc"
-          EOF
+          mkdir -p /tmp/mock-stack-root
+          mkdir -p /tmp/mock-stack-programs
+          mkdir -p /tmp/mock-local-bin
+          mkdir -p "$GITHUB_WORKSPACE/tests/fixtures/haskell-project/.stack-work"
+
+      - name: Verify mock stack is available
+        run: |
+          which stack
+          echo "Stack location: $(which stack)"
 
       - id: action
         uses: .
         with:
-          working-directory: haskell-project
-          test: "false"
-          install-stack: "false"
-          upgrade-stack: "false"
+          working-directory: tests/fixtures/haskell-project
+          test: false
+          upgrade-stack: false
           stack-build-arguments: "--fast"
           on-dirty-files: warn
-        continue-on-error: true
 
-      - name: Assert action ran (completed without unexpected crash)
+      - name: Assert compiler output is set
         env:
-          OUTCOME: ${{ steps.action.outcome }}
+          COMPILER: ${{ steps.action.outputs.compiler }}
+          COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
         run: |
-          echo "action outcome: $OUTCOME"
-          if [ -z "$OUTCOME" ]; then
-            echo "FAIL: action did not produce an outcome"
+          echo "compiler: $COMPILER"
+          echo "compiler-version: $COMPILER_VERSION"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: compiler output is empty"
             exit 1
           fi
-          echo "PASS: action completed with outcome=$OUTCOME"
+          if [ -z "$COMPILER_VERSION" ]; then
+            echo "FAIL: compiler-version output is empty"
+            exit 1
+          fi
+          if ! echo "$COMPILER" | grep -qE '^ghc-[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: compiler output does not match expected pattern 'ghc-X.Y.Z', got: $COMPILER"
+            exit 1
+          fi
+          if ! echo "$COMPILER_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: compiler-version output does not match expected pattern 'X.Y.Z', got: $COMPILER_VERSION"
+            exit 1
+          fi
+          echo "PASS: compiler=$COMPILER compiler-version=$COMPILER_VERSION"

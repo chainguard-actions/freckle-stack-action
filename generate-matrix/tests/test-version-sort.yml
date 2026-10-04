@@ -1,0 +1,60 @@
+name: Test version sorting of stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create stack yaml files with version-like names
+        run: |
+          mkdir -p /tmp/test-versort
+          touch /tmp/test-versort/stack-10.0.0.yaml
+          touch /tmp/test-versort/stack-2.0.0.yaml
+          touch /tmp/test-versort/stack-1.0.0.yaml
+          touch /tmp/test-versort/stack-1.10.0.yaml
+          touch /tmp/test-versort/stack-1.2.0.yaml
+
+      - id: action
+        uses: .
+        with:
+          working-directory: /tmp/test-versort
+
+      - name: Assert files are version-sorted correctly
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Should be valid JSON
+          echo "$ACTUAL" | jq . > /dev/null || { echo "FAIL: output is not valid JSON"; exit 1; }
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" != "5" ]; then
+            echo "FAIL: expected 5 files, got $COUNT"
+            exit 1
+          fi
+          # With sort -V (version sort), order should be:
+          # stack-1.0.0.yaml, stack-1.2.0.yaml, stack-1.10.0.yaml, stack-2.0.0.yaml, stack-10.0.0.yaml
+          FIRST=$(echo "$ACTUAL" | jq -r '.[0]')
+          LAST=$(echo "$ACTUAL" | jq -r '.[-1]')
+          echo "first: $FIRST"
+          echo "last: $LAST"
+          if [ "$FIRST" != "stack-1.0.0.yaml" ]; then
+            echo "FAIL: expected first file to be stack-1.0.0.yaml, got $FIRST"
+            exit 1
+          fi
+          if [ "$LAST" != "stack-10.0.0.yaml" ]; then
+            echo "FAIL: expected last file to be stack-10.0.0.yaml, got $LAST"
+            exit 1
+          fi
+          # Verify 1.10.0 comes after 1.2.0 (version sort, not lexicographic)
+          IDX_1_2=$(echo "$ACTUAL" | jq 'index("stack-1.2.0.yaml")')
+          IDX_1_10=$(echo "$ACTUAL" | jq 'index("stack-1.10.0.yaml")')
+          echo "index of stack-1.2.0.yaml: $IDX_1_2"
+          echo "index of stack-1.10.0.yaml: $IDX_1_10"
+          if [ "$IDX_1_10" -le "$IDX_1_2" ]; then
+            echo "FAIL: stack-1.10.0.yaml should come after stack-1.2.0.yaml in version sort"
+            exit 1
+          fi
+          echo "PASS: files are correctly version-sorted"
