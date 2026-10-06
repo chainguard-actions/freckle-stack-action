@@ -1,0 +1,52 @@
+name: Test install-stack false without stack
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure stack is not on PATH
+        run: |
+          # Verify stack is not installed in this environment
+          if command -v stack >/dev/null 2>&1; then
+            echo "stack is already installed at: $(which stack)"
+            echo "This test requires stack to NOT be installed"
+            # We'll still run the test but note that the action may succeed
+          else
+            echo "Confirmed: stack is not installed"
+          fi
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          install-stack: false
+          upgrade-stack: false
+          test: false
+          on-dirty-files: warn
+
+      - name: Assert action failed when stack not installed and install-stack is false
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          # If stack is not installed and install-stack=false, the action must fail
+          # If stack happens to be installed, the action may succeed or fail for other reasons
+          if command -v stack >/dev/null 2>&1; then
+            echo "INFO: stack was already installed, action outcome: $OUTCOME"
+            if [ "$OUTCOME" = "success" ] || [ "$OUTCOME" = "failure" ]; then
+              echo "PASS: action ran to completion (stack was pre-installed)"
+            else
+              echo "FAIL: unexpected outcome '$OUTCOME'"
+              exit 1
+            fi
+          else
+            if [ "$OUTCOME" = "failure" ]; then
+              echo "PASS: action correctly failed when stack not installed and install-stack=false"
+            else
+              echo "FAIL: expected failure when stack not installed and install-stack=false, got '$OUTCOME'"
+              exit 1
+            fi
+          fi

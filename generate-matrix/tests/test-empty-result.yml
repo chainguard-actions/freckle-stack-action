@@ -1,0 +1,41 @@
+name: Test empty result - no matching files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create directory with no stack yaml files
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/empty-stacks"
+          touch "$GITHUB_WORKSPACE/empty-stacks/not-a-stack.txt"
+          touch "$GITHUB_WORKSPACE/empty-stacks/config.yaml"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: empty-stacks
+
+      - name: Assert stack-yamls output is an empty JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Validate it is valid JSON
+          echo "$ACTUAL" | jq . > /dev/null 2>&1 || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Validate it is an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected JSON array, got $TYPE"
+            exit 1
+          fi
+          # Validate it is empty
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" != "0" ]; then
+            echo "FAIL: expected 0 entries, got $COUNT"
+            exit 1
+          fi
+          echo "PASS"

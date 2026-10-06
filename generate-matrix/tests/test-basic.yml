@@ -1,0 +1,61 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test stack yaml files
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/test-stacks"
+          touch "$GITHUB_WORKSPACE/test-stacks/stack.yaml"
+          touch "$GITHUB_WORKSPACE/test-stacks/stack-prod.yaml"
+          touch "$GITHUB_WORKSPACE/test-stacks/stack-dev.yaml"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: test-stacks
+
+      - name: Assert stack-yamls output is a non-empty JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Validate it is valid JSON
+          echo "$ACTUAL" | jq . > /dev/null 2>&1 || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Validate it is an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected JSON array, got $TYPE"
+            exit 1
+          fi
+          # Validate it contains 3 entries
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" != "3" ]; then
+            echo "FAIL: expected 3 entries, got $COUNT"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert files are version-sorted
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          FIRST=$(echo "$ACTUAL" | jq -r '.[0]')
+          echo "first: $FIRST"
+          # stack-dev.yaml should sort before stack-prod.yaml which sorts before stack.yaml
+          # (version sort: stack-dev < stack-prod < stack.yaml)
+          if [ "$FIRST" != "stack-dev.yaml" ]; then
+            echo "FAIL: expected first entry to be 'stack-dev.yaml', got '$FIRST'"
+            exit 1
+          fi
+          echo "PASS"

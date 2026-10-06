@@ -8,15 +8,15 @@
 
 **Test Policy SHA:** `843adf9e4b8f85d0c08b27b9d0b09dd094b54702`
 
-**Harden Agent Version:** `1`
+**Harden Agent Version:** `2`
 
-Action **freckle--stack-action/v5.7.23** was hardened automatically. 5 finding(s) were identified and resolved across 2 iteration(s).
+Action **freckle--stack-action/v5.7.23** was hardened automatically. 2 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### script-injection (severity: high)
 
-Rule (a): The run: block in generate-matrix/action.yml directly interpolates ${{ inputs.find-options }} into a shell command (`find ${{ inputs.find-options }} -printf ...`). An attacker-controlled value for this input can inject arbitrary shell commands.
+Sub-rule (a): The `run:` block in generate-matrix/action.yml directly interpolates `${{ inputs.find-options }}` into a shell command (`find ${{ inputs.find-options }} -printf ...`). This allows an attacker who controls the `find-options` input to inject arbitrary shell commands. The expression is substituted by the Actions runner before the shell ever sees the string, bypassing any quoting. The value should be passed via an `env:` variable and then double-quoted in the shell: `env: FIND_OPTIONS: ${{ inputs.find-options }}` and `find "$FIND_OPTIONS" ...`.
 
 Locations:
 
@@ -24,60 +24,19 @@ Locations:
 
 ### github-env-injection (severity: high)
 
-The run: block in generate-matrix/action.yml writes the output of `find ${{ inputs.find-options }} ...` directly to $GITHUB_OUTPUT without sanitization (no `printf '%s' ... | tr -d '\n\r'` step). The inputs.find-options value is attacker-controlled and could inject additional environment variable assignments via newlines.
+The `run:` block in generate-matrix/action.yml writes the output of `find ${{ inputs.find-options }} ...` directly to `$GITHUB_OUTPUT` using a heredoc (`echo 'stack-yamls<<EOM' ... >> "$GITHUB_OUTPUT"`). Because `inputs.find-options` is attacker-controlled and is interpolated unsanitized into the shell command, the content written to GITHUB_OUTPUT can contain newlines or other control characters that allow injection of additional key=value pairs into the output file. The value must be sanitized with `printf '%s' ... | tr -d '\n\r'` before being written to the special environment file.
 
 Locations:
 
-- `generate-matrix/action.yml:25`
-
-### script-injection (severity: high)
-
-Rule (a): Multiple run: blocks in example.yml directly interpolate ${{ }} expressions into shell commands. (1) Line 68-69: `${{ steps.stack.outputs.compiler }}` and `${{ matrix.stack.ghc }}` are interpolated in a bash comparison. (2) Lines 74-97: Multiple `${{ steps.stack.outputs.* }}` expressions are interpolated in bash test commands. (3) Line 119: `${{ matrix.stack-yaml }}` is interpolated in a bash conditional. All of these bypass shell quoting and allow injection of shell metacharacters.
-
-Locations:
-
-- `.github/workflows/example.yml:68`
-- `.github/workflows/example.yml:74`
-- `.github/workflows/example.yml:119`
-
-### unpinned-uses (severity: high)
-
-Multiple workflow files use action references pinned to mutable tags or version strings instead of full 40-character commit SHAs. Failing references: ci.yml: actions/checkout@v7, actions/setup-node@v6. example.yml: actions/checkout@v7, actions/setup-node@v6, actions/upload-artifact@v7, actions/download-artifact@v8. mergeabot.yml: freckle/mergeabot-action@v2. release.yml: actions/checkout@v7, actions/create-github-app-token@v3, cycjimmy/semantic-release-action@v6.0.0.
-
-Locations:
-
-- `.github/workflows/ci.yml:9`
-- `.github/workflows/example.yml:23`
-- `.github/workflows/mergeabot.yml:13`
-- `.github/workflows/release.yml:11`
-
-### missing-permissions (severity: medium)
-
-The following workflow files have no top-level permissions: key and no job-level permissions: blocks, meaning they run with the default (potentially broad) token permissions: ci.yml, example.yml, release.yml.
-
-Locations:
-
-- `.github/workflows/ci.yml:1`
-- `.github/workflows/example.yml:1`
-- `.github/workflows/release.yml:1`
+- `generate-matrix/action.yml:23`
 
 ## Iteration Notes
 
 ### Iteration 1
 
-**Fixes applied:** script-injection, github-env-injection, unpinned-uses, missing-permissions
+**Fixes applied:** script-injection, github-env-injection
 
 **Notes:**
 
-Fixed all findings: (1) generate-matrix/action.yml: moved inputs.find-options to FIND_OPTIONS env var to prevent script injection, and sanitized output with tr -d '\n\r' before writing to GITHUB_OUTPUT to prevent env injection. (2) example.yml: moved all ${{ steps.stack.outputs.* }}, ${{ matrix.stack.ghc }}, and ${{ matrix.stack-yaml }} expressions into env: blocks and referenced them as plain env vars in run: scripts. Also pinned all action references to full SHAs and added top-level permissions: contents: read. (3) ci.yml: pinned actions/checkout@v7 and actions/setup-node@v6 to full SHAs, added permissions: contents: read. (4) mergeabot.yml: pinned freckle/mergeabot-action@v2 to full SHA. (5) release.yml: pinned actions/checkout@v7, actions/create-github-app-token@v3, and cycjimmy/semantic-release-action@v6.0.0 to full SHAs, added permissions: contents: write.
-
-### Iteration 2
-
-**Fixes applied:** script-injection
-
-**Notes:**
-
-Fixed two script injection vulnerabilities:
-1. hardened/action/generate-matrix/action.yml line 26: Replaced unquoted `find $FIND_OPTIONS` with `read -ra OPTS <<< "$FIND_OPTIONS"` + `find "${OPTS[@]}"` to safely split and expand the options as an array, preventing shell metacharacter injection.
-2. hardened/action/.github/workflows/example.yml lines 86-87: Quoted `$EXPECTED_GHC` in both `[[ ]]` comparisons (`ghc-$EXPECTED_GHC` → `"ghc-$EXPECTED_GHC"` and `$EXPECTED_GHC` → `"$EXPECTED_GHC"`) to prevent glob pattern matching exploitation.
+Fixed hardened/action/generate-matrix/action.yml: (1) Moved `${{ inputs.find-options }}` to an env var `FIND_OPTIONS` and tokenized it with xargs into a bash array `find_opts`, then used `"${find_opts[@]}"` in the find command to prevent script injection. (2) Captured the find/sort/jq pipeline output into `stack_yamls`, sanitized it with `printf '%s' "$stack_yamls" | tr -d '\n\r'` into `safe_stack_yamls`, and wrote only the sanitized value to $GITHUB_OUTPUT to prevent github-env-injection.
 

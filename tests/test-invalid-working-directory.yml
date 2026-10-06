@@ -1,0 +1,32 @@
+name: Test invalid working directory error handling
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          working-directory: /nonexistent/path/that/does/not/exist
+          test: false
+          install-stack: false
+          upgrade-stack: false
+          on-dirty-files: warn
+
+      - name: Assert action failed on invalid working directory
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          # The action should fail when given a non-existent working directory
+          # because process.chdir() will throw an error
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action correctly failed with invalid working directory"
+          else
+            echo "FAIL: expected failure with invalid working directory, got '$OUTCOME'"
+            exit 1
+          fi

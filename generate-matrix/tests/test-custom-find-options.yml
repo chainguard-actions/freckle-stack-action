@@ -1,0 +1,75 @@
+name: Test custom find-options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test directory with stack yaml files at various depths
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/custom-stacks/subdir"
+          touch "$GITHUB_WORKSPACE/custom-stacks/stack-1.0.0.yaml"
+          touch "$GITHUB_WORKSPACE/custom-stacks/stack-2.0.0.yaml"
+          touch "$GITHUB_WORKSPACE/custom-stacks/stack-10.0.0.yaml"
+          # This file is in a subdirectory - default maxdepth 1 would exclude it
+          touch "$GITHUB_WORKSPACE/custom-stacks/subdir/stack-nested.yaml"
+
+      - id: action
+        uses: .
+        with:
+          working-directory: custom-stacks
+          find-options: "-type f -maxdepth 1 -name 'stack*.yaml'"
+
+      - name: Assert stack-yamls output contains only top-level files
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Validate it is valid JSON
+          echo "$ACTUAL" | jq . > /dev/null 2>&1 || { echo "FAIL: output is not valid JSON"; exit 1; }
+          # Validate it is an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected JSON array, got $TYPE"
+            exit 1
+          fi
+          # Should have exactly 3 top-level files (not the nested one)
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" != "3" ]; then
+            echo "FAIL: expected 3 entries (top-level only), got $COUNT"
+            exit 1
+          fi
+          echo "PASS"
+
+      - name: Assert version sort order is correct (1.0.0 < 2.0.0 < 10.0.0)
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          FIRST=$(echo "$ACTUAL" | jq -r '.[0]')
+          SECOND=$(echo "$ACTUAL" | jq -r '.[1]')
+          THIRD=$(echo "$ACTUAL" | jq -r '.[2]')
+          echo "first: $FIRST"
+          echo "second: $SECOND"
+          echo "third: $THIRD"
+          # Version sort: 1.0.0 < 2.0.0 < 10.0.0 (not lexicographic where 10 < 2)
+          if [ "$FIRST" != "stack-1.0.0.yaml" ]; then
+            echo "FAIL: expected first to be 'stack-1.0.0.yaml', got '$FIRST'"
+            exit 1
+          fi
+          if [ "$SECOND" != "stack-2.0.0.yaml" ]; then
+            echo "FAIL: expected second to be 'stack-2.0.0.yaml', got '$SECOND'"
+            exit 1
+          fi
+          if [ "$THIRD" != "stack-10.0.0.yaml" ]; then
+            echo "FAIL: expected third to be 'stack-10.0.0.yaml', got '$THIRD'"
+            exit 1
+          fi
+          echo "PASS: version sort order is correct"
