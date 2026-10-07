@@ -1,0 +1,52 @@
+name: Test version sorting of stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: ${{ github.workspace }}/tests/fixtures/stacks
+
+      - name: Assert version sort order (stack-2.yaml before stack-10.yaml)
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+
+          # Must be non-empty
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+
+          # Must be valid JSON array
+          echo "$ACTUAL" | jq -e 'type == "array"' > /dev/null || {
+            echo "FAIL: output is not a JSON array"
+            exit 1
+          }
+
+          # Get indices of stack-2.yaml and stack-10.yaml
+          IDX_2=$(echo "$ACTUAL" | jq 'index("stack-2.yaml")')
+          IDX_10=$(echo "$ACTUAL" | jq 'index("stack-10.yaml")')
+
+          echo "index of stack-2.yaml: $IDX_2"
+          echo "index of stack-10.yaml: $IDX_10"
+
+          # Both must be present
+          if [ "$IDX_2" = "null" ] || [ "$IDX_10" = "null" ]; then
+            echo "FAIL: one or both files not found in output"
+            exit 1
+          fi
+
+          # Version sort: stack-2 (2) should come before stack-10 (10)
+          if [ "$IDX_2" -ge "$IDX_10" ]; then
+            echo "FAIL: expected stack-2.yaml (idx=$IDX_2) before stack-10.yaml (idx=$IDX_10) in version sort"
+            exit 1
+          fi
+
+          echo "PASS: version sort order is correct (stack-2.yaml at $IDX_2, stack-10.yaml at $IDX_10)"

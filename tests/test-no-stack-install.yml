@@ -1,0 +1,43 @@
+name: Test graceful failure when stack not installed and install-stack=false
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure stack is not on PATH
+        run: |
+          # Remove stack from PATH if it exists, so we can test install-stack=false
+          if command -v stack >/dev/null 2>&1; then
+            STACK_PATH="$(command -v stack)"
+            echo "Found stack at: $STACK_PATH"
+            sudo rm -f "$STACK_PATH"
+          fi
+          echo "Stack removed from PATH (or was not present)"
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          working-directory: tests/fixtures/haskell-project
+          test: false
+          install-stack: false
+          upgrade-stack: false
+          on-dirty-files: warn
+
+      - name: Assert action failed gracefully when stack not installed
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed gracefully as expected when stack is not installed"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "FAIL: expected action to fail when stack is not installed and install-stack=false"
+            exit 1
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

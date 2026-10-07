@@ -1,0 +1,49 @@
+name: Test custom find options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: ${{ github.workspace }}/tests/fixtures/stacks
+          # Only match stack-2.yaml specifically
+          find-options: "-type f -maxdepth 1 -name 'stack-2.yaml'"
+
+      - name: Assert only stack-2.yaml is returned
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+
+          # Must be non-empty
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+
+          # Must be valid JSON array
+          echo "$ACTUAL" | jq -e 'type == "array"' > /dev/null || {
+            echo "FAIL: output is not a JSON array"
+            exit 1
+          }
+
+          # Must contain exactly one element
+          LENGTH=$(echo "$ACTUAL" | jq 'length')
+          echo "array length: $LENGTH"
+          if [ "$LENGTH" != "1" ]; then
+            echo "FAIL: expected exactly 1 file but got $LENGTH"
+            exit 1
+          fi
+
+          # Must contain stack-2.yaml
+          echo "$ACTUAL" | jq -e 'contains(["stack-2.yaml"])' > /dev/null || {
+            echo "FAIL: output does not contain stack-2.yaml"
+            exit 1
+          }
+
+          echo "PASS: custom find options correctly filtered to stack-2.yaml only"

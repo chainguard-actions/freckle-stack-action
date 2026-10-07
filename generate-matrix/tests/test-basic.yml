@@ -1,0 +1,57 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: ${{ github.workspace }}/tests/fixtures/stacks
+
+      - name: Assert stack-yamls output is a JSON array with expected files
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+
+          # Must be non-empty
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+
+          # Must be valid JSON array
+          echo "$ACTUAL" | jq -e 'type == "array"' > /dev/null || {
+            echo "FAIL: output is not a JSON array"
+            exit 1
+          }
+
+          # Must contain stack.yaml
+          echo "$ACTUAL" | jq -e 'contains(["stack.yaml"])' > /dev/null || {
+            echo "FAIL: output does not contain stack.yaml"
+            exit 1
+          }
+
+          # Must contain stack-2.yaml
+          echo "$ACTUAL" | jq -e 'contains(["stack-2.yaml"])' > /dev/null || {
+            echo "FAIL: output does not contain stack-2.yaml"
+            exit 1
+          }
+
+          # Must contain stack-10.yaml
+          echo "$ACTUAL" | jq -e 'contains(["stack-10.yaml"])' > /dev/null || {
+            echo "FAIL: output does not contain stack-10.yaml"
+            exit 1
+          }
+
+          # Must NOT contain other.yaml (doesn't match stack*.yaml)
+          echo "$ACTUAL" | jq -e 'contains(["other.yaml"]) | not' > /dev/null || {
+            echo "FAIL: output should not contain other.yaml"
+            exit 1
+          }
+
+          echo "PASS: stack-yamls output is correct"

@@ -1,0 +1,35 @@
+name: Test basic usage - build and test Haskell project
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/haskell-project
+          test: true
+          stack-build-arguments: "--fast"
+          install-stack: true
+          upgrade-stack: false
+          on-dirty-files: warn
+
+      - name: Assert compiler output is set
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+          COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
+        run: |
+          echo "compiler: $COMPILER"
+          echo "compiler-version: $COMPILER_VERSION"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: expected compiler output to be set"
+            exit 1
+          fi
+          if [ -z "$COMPILER_VERSION" ]; then
+            echo "FAIL: expected compiler-version output to be set"
+            exit 1
+          fi
+          echo "PASS: compiler=$COMPILER compiler-version=$COMPILER_VERSION"
