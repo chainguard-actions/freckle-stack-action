@@ -1,0 +1,39 @@
+name: Test empty directory - no matching stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create empty test directory
+        run: mkdir -p /tmp/empty-stacks
+
+      - id: action
+        uses: .
+        with:
+          working-directory: /tmp/empty-stacks
+
+      - name: Assert stack-yamls output is an empty JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Verify it is valid JSON
+          echo "$ACTUAL" | jq -e '.' > /dev/null || {
+            echo "FAIL: output is not valid JSON"
+            exit 1
+          }
+          # Verify it is an array
+          echo "$ACTUAL" | jq -e 'type == "array"' > /dev/null || {
+            echo "FAIL: output is not a JSON array"
+            exit 1
+          }
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" -ne 0 ]; then
+            echo "FAIL: expected 0 stack yamls, got $COUNT"
+            exit 1
+          fi
+          echo "PASS: empty array returned as expected"

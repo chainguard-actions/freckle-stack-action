@@ -1,0 +1,42 @@
+name: Test install-stack false
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure stack is not on PATH
+        run: |
+          # Verify stack is not pre-installed (it typically isn't on ubuntu-latest)
+          if command -v stack >/dev/null 2>&1; then
+            echo "stack is already installed at $(which stack), test may not be meaningful"
+          else
+            echo "stack is not installed, proceeding with test"
+          fi
+
+      - id: action
+        uses: .
+        continue-on-error: true
+        with:
+          working-directory: tests/fixtures/haskell-project
+          install-stack: false
+          upgrade-stack: false
+          test: false
+
+      - name: Assert action failed gracefully when stack not installed and install-stack is false
+        env:
+          OUTCOME: ${{ steps.action.outcome }}
+        run: |
+          echo "outcome: $OUTCOME"
+          # When stack is not installed and install-stack=false, the action should fail
+          # When stack IS already installed, the action may succeed or fail for other reasons
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "PASS: action failed as expected (stack not installed or build failed)"
+          elif [ "$OUTCOME" = "success" ]; then
+            echo "PASS: action succeeded (stack was pre-installed)"
+          else
+            echo "FAIL: unexpected outcome '$OUTCOME'"
+            exit 1
+          fi

@@ -1,14 +1,12 @@
 cabal-version: 1.12
 
-name:           example
+name:           hello
 version:        0.0.0.0
 build-type:     Simple
 
 library
   exposed-modules:
-      Foo
-  other-modules:
-      Paths_example
+      Hello
   hs-source-dirs:
       src
   build-depends:

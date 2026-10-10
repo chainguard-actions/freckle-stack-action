@@ -1,0 +1,54 @@
+name: Test custom find options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test directory with mixed yaml files
+        run: |
+          mkdir -p /tmp/custom-find-test
+          touch /tmp/custom-find-test/stack-prod.yaml
+          touch /tmp/custom-find-test/stack-staging.yaml
+          touch /tmp/custom-find-test/other.yaml
+          touch /tmp/custom-find-test/config.yml
+
+      - id: action
+        uses: .
+        with:
+          working-directory: /tmp/custom-find-test
+          find-options: "-type f -maxdepth 1 -name 'stack-*.yaml'"
+
+      - name: Assert only stack-prefixed yaml files are found
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Verify it is valid JSON array
+          echo "$ACTUAL" | jq -e 'type == "array"' > /dev/null || {
+            echo "FAIL: output is not a JSON array"
+            exit 1
+          }
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" -ne 2 ]; then
+            echo "FAIL: expected 2 stack yamls, got $COUNT"
+            exit 1
+          fi
+          # Verify other.yaml is NOT in the output
+          if echo "$ACTUAL" | jq -e 'map(select(. == "other.yaml")) | length > 0' > /dev/null; then
+            echo "FAIL: 'other.yaml' should not be in output"
+            exit 1
+          fi
+          # Verify config.yml is NOT in the output
+          if echo "$ACTUAL" | jq -e 'map(select(. == "config.yml")) | length > 0' > /dev/null; then
+            echo "FAIL: 'config.yml' should not be in output"
+            exit 1
+          fi
+          echo "PASS: only stack-prefixed yaml files found"

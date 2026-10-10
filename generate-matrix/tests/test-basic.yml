@@ -1,0 +1,47 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/stacks
+
+      - name: Assert stack-yamls output is non-empty JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Verify it is valid JSON array
+          echo "$ACTUAL" | jq -e 'type == "array"' > /dev/null || {
+            echo "FAIL: output is not a JSON array"
+            exit 1
+          }
+          # Verify it contains at least one element
+          COUNT=$(echo "$ACTUAL" | jq 'length')
+          echo "count: $COUNT"
+          if [ "$COUNT" -lt 1 ]; then
+            echo "FAIL: expected at least 1 stack yaml, got $COUNT"
+            exit 1
+          fi
+          echo "PASS: found $COUNT stack yaml(s)"
+
+      - name: Assert stack.yaml is in the output
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if ! echo "$ACTUAL" | jq -e 'map(select(. == "stack.yaml")) | length > 0' > /dev/null; then
+            echo "FAIL: expected 'stack.yaml' in output"
+            exit 1
+          fi
+          echo "PASS: stack.yaml found in output"
