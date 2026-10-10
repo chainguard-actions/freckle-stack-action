@@ -1,4 +1,4 @@
-name: Test - compiler-tools and stack-yaml inputs
+name: Test - run Haskell tests with test=true
 on:
   workflow_dispatch:
 jobs:
@@ -10,8 +10,8 @@ jobs:
       - name: Install fake stack binary
         run: |
           # Install fake stack to a location that is always on PATH
-          cp "$GITHUB_WORKSPACE/hardened/tests/fixtures/bin/stack" /usr/local/bin/stack || \
-            sudo cp "$GITHUB_WORKSPACE/hardened/tests/fixtures/bin/stack" /usr/local/bin/stack
+          cp "$GITHUB_WORKSPACE/tests/fixtures/bin/stack" /usr/local/bin/stack || \
+            sudo cp "$GITHUB_WORKSPACE/tests/fixtures/bin/stack" /usr/local/bin/stack
           chmod +x /usr/local/bin/stack || sudo chmod +x /usr/local/bin/stack
           which stack
           stack query 2>/dev/null || true
@@ -20,17 +20,14 @@ jobs:
         uses: .
         continue-on-error: true
         with:
-          working-directory: hardened/tests/fixtures/haskell-project
-          test: "false"
+          working-directory: tests/fixtures/haskell-project-with-tests
+          test: "true"
           install-stack: "true"
           upgrade-stack: "false"
           stack-arguments: "--no-terminal"
           stack-build-arguments: "--fast"
-          compiler-tools: |
-            hlint
-            hoogle
-          stack-yaml: "stack.yaml"
           color: "false"
+          on-dirty-files: "warn"
 
       - name: Assert action ran (outputs set, or failed gracefully on missing cache service)
         env:
@@ -50,7 +47,15 @@ jobs:
               echo "FAIL: action succeeded but 'compiler-version' output is empty"
               exit 1
             fi
-            echo "PASS: compiler-tools and stack-yaml scenario succeeded, compiler=$COMPILER, version=$COMPILER_VERSION"
+            if ! echo "$COMPILER" | grep -q "^ghc-"; then
+              echo "FAIL: expected compiler to start with 'ghc-', got: $COMPILER"
+              exit 1
+            fi
+            if ! echo "$COMPILER_VERSION" | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+"; then
+              echo "FAIL: expected compiler-version to look like a version number, got: $COMPILER_VERSION"
+              exit 1
+            fi
+            echo "PASS: test=true scenario succeeded, compiler=$COMPILER, version=$COMPILER_VERSION"
           elif [ "$OUTCOME" = "failure" ]; then
             echo "PASS: action failed gracefully (likely cache service unavailable in test environment)"
           else

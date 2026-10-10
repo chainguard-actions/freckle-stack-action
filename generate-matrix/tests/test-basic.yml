@@ -1,0 +1,62 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/stacks
+
+      - name: Assert stack-yamls output is a JSON array with expected files
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+
+          # Must be valid JSON
+          echo "$ACTUAL" | jq . || { echo "FAIL: output is not valid JSON"; exit 1; }
+
+          # Must be an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected array, got $TYPE"
+            exit 1
+          fi
+
+          # Must contain exactly 3 stack files (stack.yaml, stack-2.yaml, stack-10.yaml)
+          LENGTH=$(echo "$ACTUAL" | jq 'length')
+          if [ "$LENGTH" != "3" ]; then
+            echo "FAIL: expected 3 items, got $LENGTH"
+            exit 1
+          fi
+
+          # Must contain stack.yaml
+          if ! echo "$ACTUAL" | jq -e '.[] | select(. == "stack.yaml")' > /dev/null; then
+            echo "FAIL: stack.yaml not found in output"
+            exit 1
+          fi
+
+          # Must contain stack-2.yaml
+          if ! echo "$ACTUAL" | jq -e '.[] | select(. == "stack-2.yaml")' > /dev/null; then
+            echo "FAIL: stack-2.yaml not found in output"
+            exit 1
+          fi
+
+          # Must contain stack-10.yaml
+          if ! echo "$ACTUAL" | jq -e '.[] | select(. == "stack-10.yaml")' > /dev/null; then
+            echo "FAIL: stack-10.yaml not found in output"
+            exit 1
+          fi
+
+          # Must NOT contain other.yaml (doesn't match stack*.yaml)
+          if echo "$ACTUAL" | jq -e '.[] | select(. == "other.yaml")' > /dev/null; then
+            echo "FAIL: other.yaml should not be in output"
+            exit 1
+          fi
+
+          echo "PASS"

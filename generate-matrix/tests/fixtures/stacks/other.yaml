@@ -1,0 +1,2 @@
+# Non-stack fixture file - should NOT be picked up by default find options
+name: other

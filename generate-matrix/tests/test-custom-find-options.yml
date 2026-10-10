@@ -1,0 +1,45 @@
+name: Test custom find-options input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/stacks
+          find-options: "-type f -maxdepth 1 -name 'other.yaml'"
+
+      - name: Assert custom find-options returns only other.yaml
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+
+          # Must be valid JSON
+          echo "$ACTUAL" | jq . || { echo "FAIL: output is not valid JSON"; exit 1; }
+
+          # Must be an array with exactly 1 element
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected array, got $TYPE"
+            exit 1
+          fi
+
+          LENGTH=$(echo "$ACTUAL" | jq 'length')
+          if [ "$LENGTH" != "1" ]; then
+            echo "FAIL: expected 1 item, got $LENGTH"
+            exit 1
+          fi
+
+          # Must contain other.yaml
+          FIRST=$(echo "$ACTUAL" | jq -r '.[0]')
+          if [ "$FIRST" != "other.yaml" ]; then
+            echo "FAIL: expected 'other.yaml', got '$FIRST'"
+            exit 1
+          fi
+
+          echo "PASS: custom find-options correctly returned other.yaml"

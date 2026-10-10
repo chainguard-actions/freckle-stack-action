@@ -1,0 +1,106 @@
+#!/bin/sh
+# Fake stack binary for testing freckle/stack-action
+# Responds to all commands the action needs without actually building Haskell
+
+# Parse arguments to find the actual subcommand (skip global flags)
+SUBCOMMAND=""
+ARGS=""
+SKIP_NEXT=0
+
+for arg in "$@"; do
+  if [ "$SKIP_NEXT" = "1" ]; then
+    SKIP_NEXT=0
+    continue
+  fi
+  case "$arg" in
+    --no-terminal|--color=*|--color)
+      continue
+      ;;
+    --stack-yaml|--resolver)
+      SKIP_NEXT=1
+      continue
+      ;;
+    --*)
+      continue
+      ;;
+    *)
+      if [ -z "$SUBCOMMAND" ]; then
+        SUBCOMMAND="$arg"
+      else
+        ARGS="$ARGS $arg"
+      fi
+      ;;
+  esac
+done
+
+case "$SUBCOMMAND" in
+  upgrade)
+    echo "stack is already up to date"
+    exit 0
+    ;;
+  setup)
+    echo "stack will use a system GHC"
+    exit 0
+    ;;
+  build)
+    echo "Build completed successfully"
+    exit 0
+    ;;
+  query)
+    cat <<'EOF'
+compiler:
+  actual: ghc-9.6.6
+  wanted: ghc-9.6.6
+EOF
+    exit 0
+    ;;
+  path)
+    # Check if --stack-root and --programs flags are present (used in getStackDirectories)
+    case "$*" in
+      *--stack-root*--programs*|*--programs*--stack-root*)
+        cat <<'EOF'
+stack-root: /root/.stack
+programs: /root/.stack/programs/x86_64-linux
+EOF
+        ;;
+      *)
+        # Full stack path output
+        cat <<'EOF'
+stack-root: /root/.stack
+programs: /root/.stack/programs/x86_64-linux
+local-bin: /root/.local/bin
+extra-include-dirs: []
+extra-library-dirs: []
+snapshot-pkg-db: /root/.stack/snapshots/x86_64-linux/lts-22.0/9.6.6/pkgdb
+local-pkg-db: /tmp/stack-work/install/x86_64-linux/lts-22.0/9.6.6/lib/x86_64-linux-ghc-9.6.6/package.conf.d
+global-pkg-db: /usr/lib/ghc-9.6.6/lib/x86_64-linux-ghc-9.6.6/package.conf.d
+ghc-paths: /root/.stack/programs/x86_64-linux/ghc-9.6.6/bin
+local-hpc-root: /tmp/stack-work/install/x86_64-linux/lts-22.0/9.6.6/hpc
+snapshot-doc-root: /root/.stack/snapshots/x86_64-linux/lts-22.0/9.6.6/doc
+local-doc-root: /tmp/stack-work/install/x86_64-linux/lts-22.0/9.6.6/doc
+local-bin-path: /root/.local/bin
+dist-dir: .stack-work/dist/x86_64-linux/ghc-9.6.6
+local-install-root: /tmp/stack-work/install/x86_64-linux/lts-22.0/9.6.6
+snapshot-install-root: /root/.stack/snapshots/x86_64-linux/lts-22.0/9.6.6
+compiler-exe: /root/.stack/programs/x86_64-linux/ghc-9.6.6/bin/ghc
+compiler-bin: /root/.stack/programs/x86_64-linux/ghc-9.6.6/bin
+compiler-tools-bin: /root/.stack/compiler-tools/x86_64-linux/ghc-9.6.6/bin
+EOF
+        ;;
+    esac
+    exit 0
+    ;;
+  exec)
+    # stack exec -- which <cmd>
+    # Return success for any which check
+    exit 0
+    ;;
+  install)
+    echo "Installed successfully"
+    exit 0
+    ;;
+  *)
+    echo "fake-stack: unknown subcommand: $SUBCOMMAND (args: $*)" >&2
+    exit 0
+    ;;
+esac
