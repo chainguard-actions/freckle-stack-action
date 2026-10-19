@@ -19,6 +19,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v5.7.29 | [`v5.7.29`](https://github.com/chainguard-actions/freckle-stack-action/tree/v5.7.29) | [`c5b62aa`](https://github.com/freckle/stack-action/commit/c5b62aa4c722658775d1c53d501a21bca1d28c5a) |
 | v5.7.30 | [`v5.7.30`](https://github.com/chainguard-actions/freckle-stack-action/tree/v5.7.30) | [`fbd3417`](https://github.com/freckle/stack-action/commit/fbd3417dd558d7b0cd1f4bd9a9605d1a39d5d42a) |
 | v5.7.31 | [`v5.7.31`](https://github.com/chainguard-actions/freckle-stack-action/tree/v5.7.31) | [`454226a`](https://github.com/freckle/stack-action/commit/454226a86f7e22e21387ab950cdecaa865365425) |
+| v5.7.32 | [`v5.7.32`](https://github.com/chainguard-actions/freckle-stack-action/tree/v5.7.32) | [`6028201`](https://github.com/freckle/stack-action/commit/6028201dabd98949397ab5ebe33eaaa8d688033f) |
 
 ## Privacy
 
