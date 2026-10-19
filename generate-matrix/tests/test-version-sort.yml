@@ -1,0 +1,40 @@
+name: Test version-sorted output order
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/stacks
+      - name: Assert version sort order (stack-2 before stack-10)
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Get indices of stack-2.yaml and stack-10.yaml
+          IDX2=$(echo "$ACTUAL" | jq 'index("stack-2.yaml")')
+          IDX10=$(echo "$ACTUAL" | jq 'index("stack-10.yaml")')
+          echo "index of stack-2.yaml: $IDX2"
+          echo "index of stack-10.yaml: $IDX10"
+          if [ -z "$IDX2" ] || [ "$IDX2" = "null" ]; then
+            echo "FAIL: stack-2.yaml not found in output"
+            exit 1
+          fi
+          if [ -z "$IDX10" ] || [ "$IDX10" = "null" ]; then
+            echo "FAIL: stack-10.yaml not found in output"
+            exit 1
+          fi
+          # Version sort: stack-2 (2) should come before stack-10 (10)
+          if [ "$IDX2" -ge "$IDX10" ]; then
+            echo "FAIL: expected stack-2.yaml (idx=$IDX2) before stack-10.yaml (idx=$IDX10) in version sort"
+            exit 1
+          fi
+          echo "PASS: version sort order is correct (stack-2 at $IDX2, stack-10 at $IDX10)"

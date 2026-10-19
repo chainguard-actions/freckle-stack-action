@@ -1,0 +1,47 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/stacks
+      - name: Assert stack-yamls output is a JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Must be non-empty
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: stack-yamls output is empty"
+            exit 1
+          fi
+          # Must be valid JSON array
+          echo "$ACTUAL" | jq -e 'type == "array"' > /dev/null || {
+            echo "FAIL: output is not a JSON array"
+            exit 1
+          }
+          echo "PASS: output is a valid JSON array"
+      - name: Assert stack-yamls contains expected files
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Should contain stack.yaml, stack-2.yaml, stack-10.yaml but NOT other.yaml
+          for expected in "stack.yaml" "stack-2.yaml" "stack-10.yaml"; do
+            if ! echo "$ACTUAL" | jq -e --arg f "$expected" 'index($f) != null' > /dev/null; then
+              echo "FAIL: expected '$expected' in output but not found"
+              exit 1
+            fi
+            echo "PASS: found '$expected'"
+          done
+          # other.yaml should NOT be present
+          if echo "$ACTUAL" | jq -e '"other.yaml" | IN(.[])' > /dev/null 2>&1; then
+            echo "FAIL: 'other.yaml' should not be in output"
+            exit 1
+          fi
+          echo "PASS: 'other.yaml' correctly excluded"
