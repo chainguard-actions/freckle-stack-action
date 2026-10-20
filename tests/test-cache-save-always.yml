@@ -1,0 +1,30 @@
+name: Test with cache-save-always enabled
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/haskell-project
+          test: false
+          upgrade-stack: false
+          stack-build-arguments: "--fast"
+          cache-save-always: true
+          cache-prefix: "test-cache-v1"
+          on-dirty-files: warn
+
+      - name: Assert compiler output is set
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+        run: |
+          echo "compiler: $COMPILER"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: expected compiler output to be set"
+            exit 1
+          fi
+          echo "PASS: action completed with cache-save-always=true, compiler=$COMPILER"

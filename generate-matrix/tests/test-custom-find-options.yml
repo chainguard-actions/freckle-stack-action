@@ -1,0 +1,46 @@
+name: Test custom find options
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/stacks
+          find-options: "-type f -maxdepth 1 -name 'stack-2.yaml'"
+
+      - name: Assert only stack-2.yaml is returned
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+
+          # Must be valid JSON
+          echo "$ACTUAL" | jq . || { echo "FAIL: output is not valid JSON"; exit 1; }
+
+          # Must be an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected array, got $TYPE"
+            exit 1
+          fi
+
+          # Must contain exactly one element
+          LEN=$(echo "$ACTUAL" | jq 'length')
+          if [ "$LEN" != "1" ]; then
+            echo "FAIL: expected 1 element, got $LEN"
+            exit 1
+          fi
+
+          # That element must be stack-2.yaml
+          ELEM=$(echo "$ACTUAL" | jq -r '.[0]')
+          if [ "$ELEM" != "stack-2.yaml" ]; then
+            echo "FAIL: expected 'stack-2.yaml', got '$ELEM'"
+            exit 1
+          fi
+
+          echo "PASS"

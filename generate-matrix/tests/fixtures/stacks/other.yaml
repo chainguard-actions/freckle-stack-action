@@ -1,0 +1,2 @@
+# Non-stack yaml file - should NOT be matched by default find options
+name: other

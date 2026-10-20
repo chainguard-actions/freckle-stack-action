@@ -1,0 +1,75 @@
+name: Test basic usage - find stack yaml files
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/stacks
+
+      - name: Assert stack-yamls output is a JSON array with expected files
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+
+          # Must be valid JSON
+          echo "$ACTUAL" | jq . || { echo "FAIL: output is not valid JSON"; exit 1; }
+
+          # Must be an array
+          TYPE=$(echo "$ACTUAL" | jq -r 'type')
+          if [ "$TYPE" != "array" ]; then
+            echo "FAIL: expected array, got $TYPE"
+            exit 1
+          fi
+
+          # Must contain stack.yaml
+          if ! echo "$ACTUAL" | jq -e 'contains(["stack.yaml"])' > /dev/null; then
+            echo "FAIL: expected stack.yaml in output"
+            exit 1
+          fi
+
+          # Must contain stack-2.yaml
+          if ! echo "$ACTUAL" | jq -e 'contains(["stack-2.yaml"])' > /dev/null; then
+            echo "FAIL: expected stack-2.yaml in output"
+            exit 1
+          fi
+
+          # Must contain stack-10.yaml
+          if ! echo "$ACTUAL" | jq -e 'contains(["stack-10.yaml"])' > /dev/null; then
+            echo "FAIL: expected stack-10.yaml in output"
+            exit 1
+          fi
+
+          # Must NOT contain other.yaml (doesn't match stack*.yaml pattern)
+          if echo "$ACTUAL" | jq -e 'contains(["other.yaml"])' > /dev/null; then
+            echo "FAIL: other.yaml should not be in output"
+            exit 1
+          fi
+
+          echo "PASS"
+
+      - name: Assert version sorting (stack-2 before stack-10)
+        env:
+          ACTUAL: ${{ steps.action.outputs.stack-yamls }}
+        run: |
+          echo "actual: $ACTUAL"
+
+          # Get indices of stack-2.yaml and stack-10.yaml
+          IDX2=$(echo "$ACTUAL" | jq 'index("stack-2.yaml")')
+          IDX10=$(echo "$ACTUAL" | jq 'index("stack-10.yaml")')
+
+          echo "index of stack-2.yaml: $IDX2"
+          echo "index of stack-10.yaml: $IDX10"
+
+          if [ "$IDX2" -ge "$IDX10" ]; then
+            echo "FAIL: expected stack-2.yaml (index $IDX2) to come before stack-10.yaml (index $IDX10) in version sort"
+            exit 1
+          fi
+
+          echo "PASS: version sort is correct"
