@@ -1,0 +1,47 @@
+name: Test per-step and setup/query/path arguments
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: example
+          test: true
+          color: false
+          upgrade-stack: false
+          stack-build-arguments: "--fast"
+          stack-build-arguments-dependencies: "--no-haddock-deps"
+          stack-build-arguments-build: "--no-haddock"
+          stack-build-arguments-test: "--no-haddock"
+          stack-setup-arguments: "--install-ghc"
+          stack-query-arguments: "compiler"
+          stack-path-arguments: "--stack-root"
+          cache-prefix: "test-step-arguments-v1"
+
+      - name: Assert outputs are set
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+          COMPILER_VERSION: ${{ steps.action.outputs.compiler-version }}
+          STACK_ROOT: ${{ steps.action.outputs.stack-root }}
+        run: |
+          echo "compiler: $COMPILER"
+          echo "compiler-version: $COMPILER_VERSION"
+          echo "stack-root: $STACK_ROOT"
+          if ! echo "$COMPILER" | grep -qE '^ghc-[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: compiler output '$COMPILER' does not match ghc-X.Y.Z"
+            exit 1
+          fi
+          if [ "ghc-$COMPILER_VERSION" != "$COMPILER" ]; then
+            echo "FAIL: compiler-version '$COMPILER_VERSION' inconsistent with compiler '$COMPILER'"
+            exit 1
+          fi
+          if [ -z "$STACK_ROOT" ]; then
+            echo "FAIL: expected stack-root output to be set"
+            exit 1
+          fi
+          echo "PASS"

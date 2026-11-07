@@ -1,0 +1,42 @@
+name: Test compiler-tools installation
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: example
+          test: false
+          color: false
+          upgrade-stack: false
+          stack-build-arguments: "--fast"
+          compiler-tools: |
+            hspec-discover
+          cache-prefix: "test-compiler-tools-v1"
+
+      - name: Assert compiler tool was installed
+        env:
+          TOOLS_BIN: ${{ steps.action.outputs.compiler-tools-bin }}
+          COMPILER: ${{ steps.action.outputs.compiler }}
+        run: |
+          echo "compiler: $COMPILER"
+          echo "compiler-tools-bin: $TOOLS_BIN"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: compiler output not set"
+            exit 1
+          fi
+          if [ -z "$TOOLS_BIN" ]; then
+            TOOLS_BIN="$(cd example && stack path --compiler-tools-bin)"
+            echo "compiler-tools-bin (from stack path): $TOOLS_BIN"
+          fi
+          ls -la "$TOOLS_BIN" || true
+          if [ ! -x "$TOOLS_BIN/hspec-discover" ]; then
+            echo "FAIL: hspec-discover not found in $TOOLS_BIN"
+            exit 1
+          fi
+          echo "PASS"
