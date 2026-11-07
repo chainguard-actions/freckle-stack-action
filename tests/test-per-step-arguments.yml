@@ -1,0 +1,33 @@
+name: Test per-step and per-command stack arguments
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          working-directory: tests/fixtures/haskell-project
+          test: true
+          upgrade-stack: false
+          stack-build-arguments: "--fast"
+          stack-build-arguments-dependencies: "--no-haddock"
+          stack-build-arguments-build: "--no-haddock"
+          stack-build-arguments-test: "--no-haddock"
+          stack-setup-arguments: "--install-ghc"
+          stack-path-arguments: "--verbosity info"
+          stack-query-arguments: "--verbosity info"
+
+      - name: Assert action succeeded and compiler output is set
+        env:
+          COMPILER: ${{ steps.action.outputs.compiler }}
+        run: |
+          echo "compiler: $COMPILER"
+          if [ -z "$COMPILER" ]; then
+            echo "FAIL: expected compiler output to be set"
+            exit 1
+          fi
+          echo "PASS: compiler=$COMPILER"

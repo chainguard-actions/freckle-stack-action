@@ -16,19 +16,19 @@ Action **freckle--stack-action/v5.7.33** was hardened automatically. 2 finding(s
 
 ### script-injection (severity: high)
 
-Rule (a): The `run:` block in generate-matrix/action.yml directly interpolates `${{ inputs.find-options }}` into a shell command string. An attacker who calls this composite action can supply a malicious value for `find-options` (e.g., `"; malicious-command"`) to achieve arbitrary command execution on the runner. The offending line is: `find ${{ inputs.find-options }} -printf '"%f"\n' | sort -V | jq --slurp`. The `inputs.find-options` value must be passed via an `env:` block and the shell variable must be double-quoted, or the argument must be validated before use.
+Sub-rule (a): the run: block puts the expression straight into the shell command: `find ${{ inputs.find-options }} -printf '"%f"\n' | sort -V | jq --slurp`. The caller-supplied find-options input is pasted into the bash script before the shell runs. Someone can inject shell metacharacters (e.g. `; curl ... ;`) or find actions such as -exec or -delete. Move it to an env: variable. Because find-options is a list of arguments, parse it safely (e.g. read it into a bash array), and do not expand an unquoted ${{ }} expression.
 
 Locations:
 
-- `generate-matrix/action.yml:20`
+- `generate-matrix/action.yml:25`
 
 ### github-env-injection (severity: high)
 
-The `run:` block in generate-matrix/action.yml writes to `$GITHUB_OUTPUT` using a heredoc that includes the output of `find ${{ inputs.find-options }}`. The `inputs.find-options` value is directly interpolated (no sanitization via `printf '%s' ... | tr -d '\n\r'`) before being written to the special environment file `$GITHUB_OUTPUT`. This allows an attacker-controlled input to inject arbitrary key-value pairs into the GitHub output context.
+The step writes output built from the untrusted inputs.find-options to $GITHUB_OUTPUT inside a fixed 'EOM' heredoc, with no `printf '%s' ... | tr -d '\n\r'` cleanup first. The input decides which files are matched and what is printed. A filename or injected output that contains newlines and the line 'EOM' can end the heredoc early and set extra step outputs.
 
 Locations:
 
-- `generate-matrix/action.yml:19`
+- `generate-matrix/action.yml:23`
 
 ## Iteration Notes
 
@@ -38,5 +38,5 @@ Locations:
 
 **Notes:**
 
-Fixed generate-matrix/action.yml: (1) Moved `${{ inputs.find-options }}` to the `env:` block as `FIND_OPTIONS` and used xargs-based quote-aware tokenization into a bash array `find_args` to prevent script injection — the `find` command now uses `"${find_args[@]}"` with each argument properly quoted and separate. A `xargs -r true` guard ensures the step fails on unmatched quotes. (2) Replaced the fixed heredoc delimiter `EOM` with a random one generated from `/dev/urandom` (`EOF_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')`) to prevent github-env-injection via delimiter collision.
+generate-matrix/action.yml: inputs.find-options now goes through env FIND_OPTIONS. It is split into a bash array the same way upstream's shell split it, honoring quotes, using the guarded xargs split (with the 'xargs -r true' check for unmatched quotes), and passed to find as "${find_args[@]}". So the default -name 'stack*.yaml' still reaches find as the single word stack*.yaml. The fixed EOM heredoc delimiter is now random for each run (EOM_ followed by 16 bytes from /dev/urandom). The multi-line JSON value is written unchanged.
 

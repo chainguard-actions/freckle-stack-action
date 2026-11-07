@@ -10,25 +10,25 @@
 
 **Harden Agent Version:** `2`
 
-Action **freckle--stack-action--generate-matrix/v5.7.33** was hardened automatically. 3 finding(s) were identified and resolved across 2 iteration(s).
+Action **freckle--stack-action--generate-matrix/v5.7.33** was hardened automatically. 3 finding(s) were identified and resolved across 1 iteration(s).
 
 ## Findings Fixed
 
 ### script-injection (severity: high)
 
-Rule (a) violation: The `run:` block directly interpolates `${{ inputs.find-options }}` into a shell command. Before the shell executes the script, the Actions runner substitutes this expression with the raw input value, allowing an attacker to inject arbitrary shell commands by supplying metacharacters (e.g., `;`, `&&`, `$(...)`) in the `find-options` input. The offending line is: `find ${{ inputs.find-options }} -printf "%f\n" | sort -V | jq --slurp`. The fix is to pass the input via an `env:` variable and double-quote the expansion: set `env: FIND_OPTIONS: ${{ inputs.find-options }}` and use `find $FIND_OPTIONS` → `find "$FIND_OPTIONS"` in the script.
+Sub-rule (a), direct expression interpolation, in the composite step 'generate'. The line `find ${{ inputs.find-options }} -printf '"%f"\n' | sort -V | jq --slurp` puts the inputs.find-options expression directly into the bash script. The value is substituted into the script text before bash runs, and it is also unquoted, so a caller can inject shell syntax such as `; curl ... ` or `$(...)`. Find options can also run commands on their own (e.g. -exec). Fix: pass the input through an env: variable and parse it safely, for example `read -ra FIND_OPTS <<< "$FIND_OPTIONS"; find "${FIND_OPTS[@]}" ...`, or drop the free-form find-options input.
 
 Locations:
 
-- `action.yml:26`
+- `action.yml:25`
 
 ### github-env-injection (severity: high)
 
-The `run:` block writes to `$GITHUB_OUTPUT` (line 28) using a heredoc whose content is derived from `find ${{ inputs.find-options }} ...`. The untrusted `inputs.find-options` value flows — without sanitization (`printf '%s' ... | tr -d '\n\r'`) — into `$GITHUB_OUTPUT`. A malicious input containing newlines could inject additional key=value pairs into the output context, potentially overwriting other step outputs. The fix requires sanitizing the value before it is written to `$GITHUB_OUTPUT`.
+The 'generate' step writes output controlled by inputs.find-options to $GITHUB_OUTPUT using a fixed heredoc delimiter ('stack-yamls<<EOM' ... 'EOM'). No `printf '%s' ... | tr -d '\n\r'` sanitization is done first. Because the caller controls the find arguments (for example `-printf 'EOM\nother=value\n'` or -exec), the caller can print the delimiter followed by extra lines and inject arbitrary step outputs. Fix: compute the JSON value, sanitize it (or use a random delimiter), and validate the find options.
 
 Locations:
 
-- `action.yml:28`
+- `action.yml:23`
 
 ### static-inline-injection (severity: high)
 
@@ -46,16 +46,5 @@ Locations:
 
 **Notes:**
 
-Fixed all three findings in hardened/action/action.yml:
-1. Moved `${{ inputs.find-options }}` from the run: block to an env: variable `FIND_OPTIONS` to prevent script injection.
-2. Split FIND_OPTIONS into an array using `read -r -d '' -a find_args <<< "$FIND_OPTIONS" || true` (whitespace split matching upstream's unquoted usage), then passed as `"${find_args[@]}"` to find.
-3. Replaced the fixed heredoc delimiter `EOM` with a random one from /dev/urandom to prevent github-env-injection via newlines in the output value. The multi-line jq output is preserved as-is in the heredoc (correct for multi-line values per policy).
-
-### Iteration 1
-
-**Fixes applied:** publish-gate
-
-**Notes:**
-
-Fixed action.yml line 28: replaced `read -r -d '' -a find_args <<< "$FIND_OPTIONS" || true` with the xargs-based tokenization approach. The upstream action interpolated the `find-options` input as an unquoted `${{ }}` expression, so the shell honored quotes in the value (e.g., `-name 'stack*.yaml'` becomes two tokens: `-name` and `stack*.yaml`). The new approach uses `printf '%s' "$FIND_OPTIONS" | xargs -r true` to fail on unmatched quotes, then `while IFS= read -r -d '' t; do find_args+=("$t"); done < <(printf '%s' "$FIND_OPTIONS" | xargs -r printf '%s\0')` to tokenize the value into an array with proper quote handling. The `[ -n "$FIND_OPTIONS" ]` guard ensures an empty input produces no arguments.
+Moved inputs.find-options into env FIND_OPTIONS and split it into a bash array with the quote-aware xargs method. Upstream pasted the expression straight into the script, so quoted values like the default -name 'stack*.yaml' are still read the same way, but nothing in the value is run as shell code. The fixed 'EOM' heredoc delimiter for $GITHUB_OUTPUT is now a random one generated each run from /dev/urandom. The multi-line JSON value is written unchanged. Not changed: callers can still pass find's own actions (e.g. -exec), because the input is meant to take any find arguments; restricting it would change how the action works.
 
