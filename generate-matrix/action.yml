@@ -42,11 +42,13 @@ runs:
       run: |
         find_args=()
         if [ -n "$FIND_OPTIONS" ]; then
+          printf '%s' "$FIND_OPTIONS" | xargs -r true >/dev/null   # fails on an unmatched quote
           while IFS= read -r -d '' t; do find_args+=("$t"); done \
-            < <(printf '%s' "$FIND_OPTIONS" | xargs printf '%s\0')
+            < <(printf '%s' "$FIND_OPTIONS" | xargs -r sh -c 'printf "%s\0" "$@"' sh)
         fi
+        EOF="EOF_$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
         {
-          echo 'stack-yamls<<EOM'
+          echo "stack-yamls<<$EOF"
           find "${find_args[@]}" -printf '"%f"\n' | sort -V | jq --slurp
-          echo 'EOM'
+          echo "$EOF"
         } >>"$GITHUB_OUTPUT"
